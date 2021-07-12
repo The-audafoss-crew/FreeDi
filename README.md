@@ -3,7 +3,7 @@ Music notation and composition software
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
-MuseScore is an open source and free music notation software. For support, contribution, and bug reports visit MuseScore.org. Fork and make pull requests!
+FreeDi(Free MiDi) is an open source and free music notation software. Fork and make pull requests!
 
 ## Features
 
