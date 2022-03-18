@@ -36,8 +36,8 @@ using namespace mu::network;
 
 void LearnService::refreshPlaylists()
 {
-    async::Channel<RetVal<Playlist> >* startedPlaylistFinishChannel = new async::Channel<RetVal<Playlist> >();
-    startedPlaylistFinishChannel->onReceive(this, [this](const RetVal<Playlist>& result) {
+    async::Channel<RetVal<Playlist> > startedPlaylistFinishChannel;
+    startedPlaylistFinishChannel.onReceive(this, [this](const RetVal<Playlist>& result) {
         if (!result.ret) {
             LOGW() << result.ret.toString();
             return;
@@ -51,8 +51,8 @@ void LearnService::refreshPlaylists()
         m_startedPlaylistChannel.send(m_startedPlaylist);
     });
 
-    async::Channel<RetVal<Playlist> >* advancedPlaylistFinishChannel = new async::Channel<RetVal<Playlist> >();
-    advancedPlaylistFinishChannel->onReceive(this, [this](const RetVal<Playlist>& result) {
+    async::Channel<RetVal<Playlist> > advancedPlaylistFinishChannel;
+    advancedPlaylistFinishChannel.onReceive(this, [this](const RetVal<Playlist>& result) {
         if (!result.ret) {
             LOGW() << result.ret.toString();
             return;
@@ -90,13 +90,12 @@ mu::async::Channel<Playlist> LearnService::advancedPlaylistChanged() const
     return m_advancedPlaylistChannel;
 }
 
-void LearnService::openVideo(const std::string& videoId) const
+void LearnService::openVideo(const QString& videoId) const
 {
-    QUrl videoUrl = configuration()->videoOpenUrl(videoId);
-    interactive()->openUrl(videoUrl.toString().toStdString());
+    openUrl(configuration()->videoOpenUrl(videoId));
 }
 
-void LearnService::th_requestPlaylist(const QUrl& playlistUrl, async::Channel<RetVal<Playlist> >* finishChannel) const
+void LearnService::th_requestPlaylist(const QUrl& playlistUrl, async::Channel<RetVal<Playlist> > finishChannel) const
 {
     TRACEFUNC;
 
@@ -106,15 +105,15 @@ void LearnService::th_requestPlaylist(const QUrl& playlistUrl, async::Channel<Re
     QBuffer playlistItemsData;
     Ret playlistItemsRet = networkManager->get(playlistUrl, &playlistItemsData, headers);
     if (!playlistItemsRet) {
-        finishChannel->send(playlistItemsRet);
+        finishChannel.send(playlistItemsRet);
         return;
     }
 
     QJsonDocument playlistInfoDoc = QJsonDocument::fromJson(playlistItemsData.data());
 
-    std::vector<std::string> playlistItemsIds = parsePlaylistItemsIds(playlistInfoDoc);
-    if (playlistItemsIds.empty()) {
-        finishChannel->send(make_ret(Err::PlaylistIsEmpty));
+    QStringList playlistItemsIds = parsePlaylistItemsIds(playlistInfoDoc);
+    if (playlistItemsIds.isEmpty()) {
+        finishChannel.send(make_ret(Err::PlaylistIsEmpty));
         return;
     }
 
@@ -122,7 +121,7 @@ void LearnService::th_requestPlaylist(const QUrl& playlistUrl, async::Channel<Re
     QBuffer videosInfoData;
     Ret videosRet = networkManager->get(playlistVideosInfoUrl, &videosInfoData, headers);
     if (!videosRet) {
-        finishChannel->send(videosRet);
+        finishChannel.send(videosRet);
         return;
     }
 
@@ -132,20 +131,20 @@ void LearnService::th_requestPlaylist(const QUrl& playlistUrl, async::Channel<Re
     result.ret = make_ret(Ret::Code::Ok);
     result.val = parsePlaylist(videosInfoDoc);
 
-    finishChannel->send(result);
+    finishChannel.send(result);
 }
 
-void LearnService::openUrl(const QUrl& url)
+void LearnService::openUrl(const QUrl& url) const
 {
-    Ret ret = interactive()->openUrl(url.toString().toStdString());
+    Ret ret = interactive()->openUrl(url);
     if (!ret) {
         LOGE() << ret.toString();
     }
 }
 
-std::vector<std::string> LearnService::parsePlaylistItemsIds(const QJsonDocument& playlistDoc) const
+QStringList LearnService::parsePlaylistItemsIds(const QJsonDocument& playlistDoc) const
 {
-    std::vector<std::string> result;
+    QStringList result;
 
     QJsonObject obj = playlistDoc.object();
     QJsonArray items = obj.value("items").toArray();
@@ -154,9 +153,9 @@ std::vector<std::string> LearnService::parsePlaylistItemsIds(const QJsonDocument
         QJsonObject itemObj = itemVal.toObject();
         QJsonObject snippetObj = itemObj.value("snippet").toObject();
         QJsonObject resourceIdObj = snippetObj.value("resourceId").toObject();
-        std::string videoId = resourceIdObj.value("videoId").toString().toStdString();
+        QString videoId = resourceIdObj.value("videoId").toString();
 
-        result.push_back(videoId);
+        result << videoId;
     }
 
     return result;
@@ -174,20 +173,20 @@ Playlist LearnService::parsePlaylist(const QJsonDocument& playlistDoc) const
         QJsonObject snippetObj = itemObj.value("snippet").toObject();
 
         PlaylistItem item;
-        item.videoId = itemObj.value("id").toString().toStdString();
+        item.videoId = itemObj.value("id").toString();
 
-        item.title = snippetObj.value("title").toString().toStdString();
-        item.author = snippetObj.value("channelTitle").toString().toStdString();
+        item.title = snippetObj.value("title").toString();
+        item.author = snippetObj.value("channelTitle").toString();
 
         QJsonObject thumbnailsObj = snippetObj.value("thumbnails").toObject();
         QJsonObject thumbnailsMediumObj = thumbnailsObj.value("medium").toObject();
-        item.thumbnailUrl = thumbnailsMediumObj.value("url").toString().toStdString();
+        item.thumbnailUrl = thumbnailsMediumObj.value("url").toString();
 
         QJsonObject contentDetails = itemObj.value("contentDetails").toObject();
         QString durationInIsoFormat = contentDetails["duration"].toString();
         item.durationSecs = DataFormatter::dateTimeFromIsoFormat(durationInIsoFormat).toSecsSinceEpoch();
 
-        result.push_back(item);
+        result << item;
     }
 
     return result;

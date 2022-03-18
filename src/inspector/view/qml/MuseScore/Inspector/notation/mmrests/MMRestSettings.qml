@@ -19,24 +19,54 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import QtQuick 2.9
-import QtQuick.Layouts 1.3
-import MuseScore.Inspector 1.0
-import MuseScore.UiComponents 1.0
+import QtQuick 2.15
+
 import MuseScore.Ui 1.0
+import MuseScore.UiComponents 1.0
+import MuseScore.Inspector 1.0
+
 import "../../common"
 
-PopupViewButton {
+Column {
     id: root
 
-    property alias model: mmrestPopup.model
+    property QtObject model: null
 
-    icon: IconCode.MULTIMEASURE_REST
-    text: qsTrc("inspector", "Multimeasure rests")
+    property NavigationPanel navigationPanel: null
+    property int navigationRowStart: 1
 
-    visible: root.model ? !root.model.isEmpty : false
+    objectName: "MMRestSettings"
 
-    MMRestPopup {
-        id: mmrestPopup
+    spacing: 12
+
+    function focusOnFirst() {
+        numberVisibilityCheckBox.focusOnFirst()
+    }
+
+    CheckBoxPropertyView {
+        id: numberVisibilityCheckBox
+        text: qsTrc("inspector", "Show number")
+        propertyItem: root.model ? root.model.isNumberVisible : null
+
+        navigation.name: "NumberVisibilityCheckBox"
+        navigation.panel: root.navigationPanel
+        navigation.row: root.navigationRowStart + 1
+    }
+
+    SpinBoxPropertyView {
+        enabled: numberVisibilityCheckBox.checked
+        titleText: qsTrc("inspector", "Number position")
+        propertyItem: root.model ? root.model.numberPosition : null
+
+        icon: IconCode.VERTICAL
+
+        minValue: -99.0
+        maxValue: 99.0
+        step: 0.5
+        decimals: 2
+        measureUnitsSymbol: qsTrc("inspector", "sp")
+
+        navigationPanel: root.navigationPanel
+        navigationRowStart: root.navigationRowStart + 2
     }
 }

@@ -22,58 +22,115 @@
 #ifndef MU_APPSHELL_APPMENUMODEL_H
 #define MU_APPSHELL_APPMENUMODEL_H
 
-#include "ui/view/abstractmenumodel.h"
+#include <memory>
 
+#include "uicomponents/view/abstractmenumodel.h"
+
+#include "actions/actionable.h"
 #include "modularity/ioc.h"
+#include "ui/imainwindow.h"
+#include "ui/iuiactionsregister.h"
+#include "ui/inavigationcontroller.h"
 #include "actions/iactionsdispatcher.h"
 #include "workspace/iworkspacemanager.h"
 #include "iappshellconfiguration.h"
-#include "userscores/iuserscoresservice.h"
+#include "project/irecentprojectsprovider.h"
+#include "internal/iappmenumodelhook.h"
+#include "plugins/ipluginsservice.h"
 
 namespace mu::appshell {
-class AppMenuModel : public ui::AbstractMenuModel
+class AppMenuModel : public uicomponents::AbstractMenuModel
 {
     Q_OBJECT
 
+    INJECT(appshell, ui::IMainWindow, mainWindow)
+    INJECT(appshell, ui::IUiActionsRegister, uiActionsRegister)
+    INJECT(appshell, ui::INavigationController, navigationController)
     INJECT(appshell, actions::IActionsDispatcher, actionsDispatcher)
     INJECT(appshell, workspace::IWorkspaceManager, workspacesManager)
     INJECT(appshell, IAppShellConfiguration, configuration)
-    INJECT(appshell, userscores::IUserScoresService, userScoresService)
+    INJECT(appshell, project::IRecentProjectsProvider, recentProjectsProvider)
+    INJECT(appshell, IAppMenuModelHook, appMenuModelHook)
+    INJECT(appshell, plugins::IPluginsService, pluginsService)
 
-    Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
+    Q_PROPERTY(QString highlightedMenuId READ highlightedMenuId NOTIFY highlightedMenuIdChanged)
+
+    Q_PROPERTY(QWindow * appWindow READ appWindow WRITE setAppWindow)
 
 public:
     explicit AppMenuModel(QObject* parent = nullptr);
 
-    QVariantList items() const;
-
     Q_INVOKABLE void load() override;
 
+    QWindow* appWindow() const;
+
+public slots:
+    void setHighlightedMenuId(QString highlightedMenuId);
+    void setAppWindow(QWindow* appWindow);
+
 signals:
-    void itemsChanged();
+    void openMenu(const QString& menuId);
+    void highlightedMenuIdChanged(QString highlightedMenuId);
 
 private:
     void setupConnections();
-    void onActionsStateChanges(const actions::ActionCodeList& codes) override;
 
-    ui::MenuItem fileItem() const;
-    ui::MenuItem editItem() const;
-    ui::MenuItem viewItem() const;
-    ui::MenuItem addItem() const;
-    ui::MenuItem formatItem() const;
-    ui::MenuItem toolsItem() const;
-    ui::MenuItem helpItem() const;
+    using uicomponents::AbstractMenuModel::makeMenuItem;
+    uicomponents::MenuItem* makeMenuItem(const actions::ActionCode& actionCode, uicomponents::MenuItemRole role);
 
-    ui::MenuItemList recentScores() const;
-    ui::MenuItemList notesItems() const;
-    ui::MenuItemList intervalsItems() const;
-    ui::MenuItemList tupletsItems() const;
-    ui::MenuItemList measuresItems() const;
-    ui::MenuItemList framesItems() const;
-    ui::MenuItemList textItems() const;
-    ui::MenuItemList linesItems() const;
-    ui::MenuItemList toolbarsItems() const;
-    ui::MenuItemList workspacesItems() const;
+    uicomponents::MenuItem* makeFileMenu();
+    uicomponents::MenuItem* makeEditMenu();
+    uicomponents::MenuItem* makeViewMenu();
+    uicomponents::MenuItem* makeAddMenu();
+    uicomponents::MenuItem* makeFormatMenu();
+    uicomponents::MenuItem* makeToolsMenu();
+    uicomponents::MenuItem* makePluginsMenu();
+    uicomponents::MenuItemList makePluginsMenuSubitems();
+    uicomponents::MenuItem* makeHelpMenu();
+    uicomponents::MenuItem* makeDiagnosticMenu();
+
+    uicomponents::MenuItemList makeRecentScoresItems();
+    uicomponents::MenuItemList appendClearRecentSection(const uicomponents::MenuItemList& recentScores);
+
+    uicomponents::MenuItemList makeNotesItems();
+    uicomponents::MenuItemList makeIntervalsItems();
+    uicomponents::MenuItemList makeTupletsItems();
+    uicomponents::MenuItemList makeMeasuresItems();
+    uicomponents::MenuItemList makeFramesItems();
+    uicomponents::MenuItemList makeTextItems();
+    uicomponents::MenuItemList makeLinesItems();
+    uicomponents::MenuItemList makeToolbarsItems();
+    uicomponents::MenuItemList makeWorkspacesItems();
+    uicomponents::MenuItemList makeShowItems();
+    uicomponents::MenuItemList makePluginsItems();
+
+    // Custom navigation
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+    bool isNavigationStarted() const;
+    bool isNavigateKey(int key) const;
+    void navigate(int key);
+
+    bool hasItemByActivateKey(const QString& keySymbol);
+    void navigate(const QString& keySymbol);
+
+    void resetNavigation();
+    void navigateToFirstMenu();
+
+    void saveMUNavigationSystemState();
+    void restoreMUNavigationSystemState();
+
+    void activateHighlightedMenu();
+
+    QString highlightedMenuId() const;
+
+    QString menuIdByActivateSymbol(const QString& symbol);
+
+    QString m_highlightedMenuId;
+    QWindow* m_appWindow = nullptr;
+
+    bool m_needActivateHighlight = true;
+    ui::INavigationControl* m_lastActiveNavigationControl = nullptr;
 };
 }
 

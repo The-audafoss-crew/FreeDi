@@ -29,19 +29,26 @@ using namespace mu::notation;
 using namespace mu::framework;
 using namespace mu::actions;
 using namespace mu::ui;
+using namespace mu::uicomponents;
 
 static const QString TITLE_KEY("title");
 static const QString ICON_KEY("icon");
 static const QString SELECTABLE_KEY("selectable");
 static const QString SELECTED_KEY("selected");
 static const QString TYPE_KEY("type");
-static const QString CODE_KEY("code");
+static const QString ID_KEY("id");
 static const QString VALUE_KEY("value");
 
 static const ActionCode TOGGLE_CONCERT_PITCH_CODE("concert-pitch");
 static const ActionCode SELECT_WORKSPACE_CODE("configure-workspaces");
 
 static constexpr int MIN_DISPLAYED_ZOOM_PERCENTAGE = 25;
+
+static const QMap<ViewMode, ActionCode> ALL_MODE_MAP {
+    { ViewMode::PAGE, "view-mode-page" },
+    { ViewMode::LINE, "view-mode-continuous" },
+    { ViewMode::SYSTEM, "view-mode-single" }
+};
 
 static ActionCode zoomTypeToActionCode(ZoomType type)
 {
@@ -65,46 +72,50 @@ QString NotationStatusBarModel::accessibilityInfo() const
     return accessibility() ? QString::fromStdString(accessibility()->accessibilityInfo().val) : QString();
 }
 
-QVariant NotationStatusBarModel::concertPitchAction() const
+QVariant NotationStatusBarModel::concertPitchItem()
 {
-    return menuItem(TOGGLE_CONCERT_PITCH_CODE).toMap();
+    return QVariant::fromValue(makeMenuItem(TOGGLE_CONCERT_PITCH_CODE));
 }
 
-QVariant NotationStatusBarModel::currentWorkspaceAction() const
+QVariant NotationStatusBarModel::currentWorkspaceItem()
 {
-    MenuItem item = menuItem(SELECT_WORKSPACE_CODE);
-    item.title = qtrc("appshell", "Workspace: ") + QString::fromStdString(workspaceConfiguration()->currentWorkspaceName());
-    return item.toMap();
+    MenuItem* item = makeMenuItem(SELECT_WORKSPACE_CODE);
+    item->setId(QString::fromStdString(item->action().code));
+
+    UiAction action;
+    action.title = qtrc("appshell", "Workspace: ") + QString::fromStdString(workspaceConfiguration()->currentWorkspaceName());
+    item->setAction(action);
+
+    return QVariant::fromValue(item);
 }
 
-MenuItem NotationStatusBarModel::menuItem(const actions::ActionCode& actionCode) const
+MenuItem* NotationStatusBarModel::makeMenuItem(const actions::ActionCode& actionCode)
 {
-    MenuItem item = actionsRegister()->action(actionCode);
-    item.state = actionsRegister()->actionState(actionCode);
+    MenuItem* item = new MenuItem(actionsRegister()->action(actionCode), this);
+    item->setId(QString::fromStdString(item->action().code));
+    item->setState(actionsRegister()->actionState(actionCode));
 
     return item;
 }
 
-QVariant NotationStatusBarModel::currentViewMode() const
+QVariant NotationStatusBarModel::currentViewMode()
 {
-    int viewMode = notation() ? static_cast<int>(notation()->viewMode()) : -1;
+    ViewMode viewMode = notation() ? notation()->viewMode() : ViewMode::PAGE;
 
-    for (const QVariant& mode : availableViewModeList()) {
-        if (mode.toMap()[TYPE_KEY].toInt() == viewMode) {
-            return mode;
+    for (MenuItem* mode : makeAvailableViewModeList()) {
+        if (ALL_MODE_MAP.key(mode->id().toStdString()) == viewMode) {
+            return QVariant::fromValue(mode);
         }
     }
 
     return QVariant();
 }
 
-QVariantList NotationStatusBarModel::availableViewModeList() const
+MenuItemList NotationStatusBarModel::makeAvailableViewModeList()
 {
-    static const QMap<ViewMode, ActionCode> allModeMap {
-        { ViewMode::PAGE, "view-mode-page" },
-        { ViewMode::LINE, "view-mode-continuous" },
-        { ViewMode::SYSTEM, "view-mode-single" }
-    };
+    if (!notation()) {
+        return {};
+    }
 
     auto correctedTitle = [](ViewMode viewMode, const QString& title) {
         switch (viewMode) {
@@ -112,25 +123,33 @@ QVariantList NotationStatusBarModel::availableViewModeList() const
             return title;
         case ViewMode::LINE:
         case ViewMode::SYSTEM:
-            return qtrc("appshell", "Continuous View");
+            return qtrc("appshell", "Continuous view");
         default:
             return title;
         }
     };
 
-    QVariantList result;
+    MenuItemList result;
 
-    for (const ViewMode& viewMode: allModeMap.keys()) {
-        ActionCode code = allModeMap[viewMode];
+    ViewMode currentViewMode = notation()->viewMode();
+
+    for (const ViewMode& viewMode: ALL_MODE_MAP.keys()) {
+        ActionCode code = ALL_MODE_MAP[viewMode];
         UiAction action = actionsRegister()->action(code);
 
-        QVariantMap viewModeObj;
-        viewModeObj[TYPE_KEY] = static_cast<int>(viewMode);
-        viewModeObj[CODE_KEY] = QString::fromStdString(code);
-        viewModeObj[TITLE_KEY] = correctedTitle(viewMode, action.title);
-        viewModeObj[ICON_KEY] = static_cast<int>(action.iconCode);
+        MenuItem* viewModeItem = new MenuItem(this);
+        action.title = correctedTitle(viewMode, action.title);
+        viewModeItem->setAction(action);
 
-        result << viewModeObj;
+        UiActionState state;
+        state.enabled = true;
+        viewModeItem->setState(state);
+
+        viewModeItem->setId(QString::fromStdString(code));
+        viewModeItem->setSelectable(true);
+        viewModeItem->setSelected(currentViewMode == viewMode);
+
+        result << viewModeItem;
     }
 
     return result;
@@ -168,10 +187,12 @@ void NotationStatusBarModel::load()
         }
 
         emit currentViewModeChanged();
+        emit availableViewModeListChanged();
         emit zoomEnabledChanged();
 
         notation()->notationChanged().onNotify(this, [this]() {
             emit currentViewModeChanged();
+            emit availableViewModeListChanged();
         });
 
         listenChangesInAccessibility();
@@ -230,9 +251,9 @@ void NotationStatusBarModel::setCurrentViewMode(const QString& modeCode)
     dispatch(codeFromQString(modeCode));
 }
 
-QVariantList NotationStatusBarModel::availableZoomList() const
+MenuItemList NotationStatusBarModel::makeAvailableZoomList()
 {
-    QVariantList result;
+    MenuItemList result;
 
     int currZoomPercentage = currentZoomPercentage();
 
@@ -240,53 +261,67 @@ QVariantList NotationStatusBarModel::availableZoomList() const
         return QString::number(percentage) + "%";
     };
 
-    auto buildZoomObj = [=](ZoomType type, const QString& title = QString(), int value = 0) {
-        QVariantMap obj;
-        obj[TYPE_KEY] = static_cast<int>(type);
-        obj[TITLE_KEY] = title.isEmpty() ? zoomTypeTitle(type) : title;
-        obj[SELECTABLE_KEY] = true;
-        obj[SELECTED_KEY] = false;
+    auto buildZoomItem = [=](ZoomType type, const QString& title = QString(), int value = 0) {
+        MenuItem* menuItem = new MenuItem(this);
+        menuItem->setId(QString::number(static_cast<int>(type)) + QString::number(value));
 
+        UiAction action;
+        action.title = title.isEmpty() ? zoomTypeTitle(type) : title;
+        menuItem->setAction(action);
+
+        UiActionState state;
+        state.enabled = true;
+        menuItem->setState(state);
+
+        menuItem->setSelectable(true);
         if (m_currentZoomType == type) {
-            obj[SELECTED_KEY] = type == ZoomType::Percentage ? value == currZoomPercentage : true;
+            menuItem->setSelected(type == ZoomType::Percentage ? value == currZoomPercentage : true);
         }
 
-        obj[VALUE_KEY] = value;
+        menuItem->setArgs(ActionData::make_arg2<ZoomType, int>(type, value));
 
-        return obj;
+        return menuItem;
     };
 
     QList<int> possibleZoomList = possibleZoomPercentageList();
 
     for (int zoom : possibleZoomList) {
-        result << buildZoomObj(ZoomType::Percentage, zoomPercentageTitle(zoom), zoom);
+        result << buildZoomItem(ZoomType::Percentage, zoomPercentageTitle(zoom), zoom);
     }
 
-    result << buildZoomObj(ZoomType::PageWidth);
-    result << buildZoomObj(ZoomType::WholePage);
-    result << buildZoomObj(ZoomType::TwoPages);
+    result << buildZoomItem(ZoomType::PageWidth);
+    result << buildZoomItem(ZoomType::WholePage);
+    result << buildZoomItem(ZoomType::TwoPages);
 
     bool isCustomZoom = m_currentZoomType == ZoomType::Percentage && !possibleZoomList.contains(currZoomPercentage);
     if (isCustomZoom) {
-        QVariantMap customZoom = buildZoomObj(ZoomType::Percentage, zoomPercentageTitle(currZoomPercentage), currZoomPercentage);
-        customZoom[SELECTED_KEY] = true;
+        MenuItem* customZoom = buildZoomItem(ZoomType::Percentage, zoomPercentageTitle(currZoomPercentage), currZoomPercentage);
+        customZoom->setSelected(true);
         result << customZoom;
     }
 
     return result;
 }
 
-void NotationStatusBarModel::setCurrentZoomIndex(int zoomIndex)
+void NotationStatusBarModel::setCurrentZoom(const QString& zoomId)
 {
-    QVariantList zoomList = availableZoomList();
+    MenuItemList zoomList = makeAvailableZoomList();
+    int zoomIndex = -1;
+    for (int i = 0; i < zoomList.count(); ++i) {
+        MenuItem* zoomItem = zoomList[i];
+        if (zoomItem->id() == zoomId) {
+            zoomIndex = i;
+            break;
+        }
+    }
 
     if (zoomIndex < 0 || zoomIndex >= zoomList.size()) {
         return;
     }
 
-    QVariantMap zoom = zoomList[zoomIndex].toMap();
-    ZoomType type = static_cast<ZoomType>(zoom[TYPE_KEY].toInt());
-    int value = zoom[VALUE_KEY].toInt();
+    MenuItem* zoom = zoomList[zoomIndex];
+    ZoomType type = zoom->args().arg<ZoomType>(0);
+    int value = zoom->args().arg<int>(1);
 
     m_currentZoomType = type;
     emit availableZoomListChanged();
@@ -342,6 +377,26 @@ QList<int> NotationStatusBarModel::possibleZoomPercentageList() const
         if (zoom >= MIN_DISPLAYED_ZOOM_PERCENTAGE) {
             result << zoom;
         }
+    }
+
+    return result;
+}
+
+QVariantList NotationStatusBarModel::availableViewModeList_property()
+{
+    return menuItemListToVariantList(makeAvailableViewModeList());
+}
+
+QVariantList NotationStatusBarModel::availableZoomList_property()
+{
+    return menuItemListToVariantList(makeAvailableZoomList());
+}
+
+QVariantList NotationStatusBarModel::menuItemListToVariantList(const MenuItemList& list) const
+{
+    QVariantList result;
+    for (MenuItem* item: list) {
+        result << QVariant::fromValue(item);
     }
 
     return result;

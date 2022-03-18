@@ -26,7 +26,6 @@
 #include "modularity/ioc.h"
 #include "async/asyncable.h"
 
-#include "imixerchannel.h"
 #include "itracksequence.h"
 #include "igettracks.h"
 #include "iaudiosource.h"
@@ -45,12 +44,15 @@ public:
     // ITrackSequence
     TrackSequenceId id() const override;
 
-    RetVal<TrackId> addTrack(const std::string& trackName, const midi::MidiData& midiData, const AudioOutputParams& outputParams) override;
-    RetVal<TrackId> addTrack(const std::string& trackName, const io::path& filePath, const AudioOutputParams& outputParams) override;
+    RetVal2<TrackId, AudioParams> addTrack(const std::string& trackName, const mpe::PlaybackData& playbackData,
+                                           const AudioParams& requiredParams) override;
+    RetVal2<TrackId, AudioParams> addTrack(const std::string& trackName, io::Device* device, const AudioParams& requiredParams) override;
 
+    TrackName trackName(const TrackId id) const override;
     TrackIdList trackIdList() const override;
 
     Ret removeTrack(const TrackId id) override;
+    void removeAllTracks() override;
 
     async::Channel<TrackId> trackAdded() const override;
     async::Channel<TrackId> trackRemoved() const override;
@@ -61,6 +63,9 @@ public:
     // IGetTracks
     TrackPtr track(const TrackId id) const override;
     TracksMap allTracks() const override;
+
+    async::Channel<TrackPtr> trackAboutToBeAdded() const override;
+    async::Channel<TrackPtr> trackAboutToBeRemoved() const override;
 
 private:
     std::shared_ptr<Mixer> mixer() const;
@@ -76,6 +81,9 @@ private:
 
     async::Channel<TrackId> m_trackAdded;
     async::Channel<TrackId> m_trackRemoved;
+
+    async::Channel<TrackPtr> m_trackAboutToBeAdded;
+    async::Channel<TrackPtr> m_trackAboutToBeRemoved;
 };
 }
 

@@ -34,7 +34,7 @@
 #include "actions/actionable.h"
 #include "iinteractive.h"
 #include "async/asyncable.h"
-#include "userscores/ifilescorecontroller.h"
+#include "project/iprojectfilescontroller.h"
 #include "ui/imainwindow.h"
 
 namespace mu::mi {
@@ -42,7 +42,7 @@ class MultiInstancesProvider : public IMultiInstancesProvider, public actions::A
 {
     INJECT(mi, actions::IActionsDispatcher, dispatcher)
     INJECT(mi, framework::IInteractive, interactive)
-    INJECT(mi, userscores::IFileScoreController, fileScoreController)
+    INJECT(mi, project::IProjectFilesController, projectFilesController)
     INJECT(mi, ui::IMainWindow, mainWindow)
 
 public:
@@ -51,9 +51,12 @@ public:
 
     void init();
 
-    // Score opening
-    bool isScoreAlreadyOpened(const io::path& scorePath) const override;
-    void activateWindowWithScore(const io::path& scorePath) override;
+    // Project opening
+    bool isProjectAlreadyOpened(const io::path& projectPath) const override;
+    void activateWindowWithProject(const io::path& projectPath) override;
+    bool isHasAppInstanceWithoutProject() const override;
+    void activateWindowWithoutProject() override;
+    bool openNewAppInstance(const QStringList& args) override;
 
     // Settings
     bool isPreferencesAlreadyOpened() const override;
@@ -66,11 +69,17 @@ public:
     // Resources (files)
     bool lockResource(const std::string& name) override;
     bool unlockResource(const std::string& name) override;
+    void notifyAboutResourceChanged(const std::string& name) override;
+    async::Channel<std::string> resourceChanged() override;
 
     // Instances info
     const std::string& selfID() const override;
+    bool isMainInstance() const override;
     std::vector<InstanceMeta> instances() const override;
     async::Notification instancesChanged() const override;
+
+    // Quit for all
+    void quitForAll() override;
 
 private:
 
@@ -84,6 +93,7 @@ private:
     std::string m_selfID;
 
     async::Notification m_instancesChanged;
+    async::Channel<std::string> m_resourceChanged;
 
     std::map<std::string, ipc::IpcLock*> m_locks;
 };

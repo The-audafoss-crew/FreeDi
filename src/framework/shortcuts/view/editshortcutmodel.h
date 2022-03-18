@@ -33,35 +33,40 @@ class EditShortcutModel : public QObject
 {
     Q_OBJECT
 
-    Q_PROPERTY(QString originSequence READ originSequence NOTIFY originSequenceChanged)
-    Q_PROPERTY(QString inputedSequence READ inputedSequence NOTIFY inputedSequenceChanged)
+    Q_PROPERTY(QString originSequence READ originSequenceInNativeFormat NOTIFY originSequenceChanged)
+    Q_PROPERTY(QString inputedSequence READ inputedSequenceInNativeFormat NOTIFY inputedSequenceChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY inputedSequenceChanged)
-    Q_PROPERTY(bool canApplySequence READ canApplySequence NOTIFY inputedSequenceChanged)
+    Q_PROPERTY(bool canApplyInputedSequence READ canApplyInputedSequence NOTIFY inputedSequenceChanged)
 
 public:
     explicit EditShortcutModel(QObject* parent = nullptr);
 
-    QString originSequence() const;
-    QString inputedSequence() const;
+    QString originSequenceInNativeFormat() const;
+    QString inputedSequenceInNativeFormat() const;
     QString errorMessage() const;
-    bool canApplySequence() const;
+    bool canApplyInputedSequence() const;
 
-    Q_INVOKABLE void load(const QString& sequence, const QVariantList& allShortcuts);
+    Q_INVOKABLE void load(const QVariant& shortcut, const QVariantList& allShortcuts);
     Q_INVOKABLE void clear();
 
     Q_INVOKABLE void inputKey(int key, Qt::KeyboardModifiers modifiers);
-    Q_INVOKABLE QString unitedSequence() const;
+
+    Q_INVOKABLE void addToOriginSequence();
+    Q_INVOKABLE void replaceOriginSequence();
 
 signals:
     void allShortcutsChanged(const QVariantList& shortcuts);
     void originSequenceChanged(const QString& sequence);
     void inputedSequenceChanged(const QString& sequence);
 
+    void applyNewSequenceRequested(const QString& newSequence);
+
 private:
-    bool needIgnoreKey(int key) const;
+    QString inputedSequence() const;
+
     void validateInputedSequence();
 
-    QVariantList m_allShortcuts;
+    QVariantList m_potentialConflictShortcuts;
     QKeySequence m_inputedSequence;
     QString m_originSequence;
     QString m_errorMessage;

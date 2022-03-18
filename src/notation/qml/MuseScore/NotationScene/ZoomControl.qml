@@ -22,8 +22,8 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 
-import MuseScore.UiComponents 1.0
 import MuseScore.Ui 1.0
+import MuseScore.UiComponents 1.0
 
 RowLayout {
     id: root
@@ -38,7 +38,7 @@ RowLayout {
     readonly property int navigationOrderMax: menuButton.navigation.order
 
     signal changeZoomPercentageRequested(var newZoomPercentage)
-    signal changeZoomRequested(var newZoomIndex)
+    signal changeZoomRequested(var zoomId)
     signal zoomInRequested()
     signal zoomOutRequested()
 
@@ -49,7 +49,9 @@ RowLayout {
         icon: IconCode.ZOOM_IN
         iconFont: ui.theme.toolbarIconsFont
 
-        normalStateColor: "transparent"
+        width: height
+        height: 28
+        transparent: true
 
         navigation.panel: root.navigationPanel
         navigation.order: root.navigationOrderMin
@@ -66,7 +68,9 @@ RowLayout {
         icon: IconCode.ZOOM_OUT
         iconFont: ui.theme.toolbarIconsFont
 
-        normalStateColor: "transparent"
+        width: height
+        height: 28
+        transparent: true
 
         navigation.panel: root.navigationPanel
         navigation.order: zoomInButton.navigation.order + 1
@@ -93,7 +97,7 @@ RowLayout {
             navigation.panel: root.navigationPanel
             navigation.order: zoomOutButton.navigation.order + 1
 
-            onValueEdited: {
+            onValueEdited: function(newValue) {
                 root.changeZoomPercentageRequested(newValue)
             }
         }
@@ -105,30 +109,21 @@ RowLayout {
         }
     }
 
-    FlatButton {
+    MenuButton {
         id: menuButton
         Layout.leftMargin: 4
         Layout.preferredWidth: 20
+        height: 28
 
         icon: IconCode.SMALL_ARROW_DOWN
-
-        normalStateColor: menuLoader.isMenuOpened ? ui.theme.accentColor : "transparent"
 
         navigation.panel: root.navigationPanel
         navigation.order: zoomInputField.navigation.order + 1
 
-        StyledMenuLoader {
-            id: menuLoader
-
-            menuAnchorItem: ui.rootItem
-
-            onHandleAction: {
-                root.changeZoomRequested(actionIndex)
-            }
-        }
-
-        onClicked: {
-            menuLoader.toggleOpened(root.availableZoomList, parent.navigation)
+        menuModel: root.availableZoomList
+        menuAnchorItem: ui.rootItem
+        onHandleMenuItem: function(itemId) {
+            root.changeZoomRequested(itemId)
         }
     }
 }

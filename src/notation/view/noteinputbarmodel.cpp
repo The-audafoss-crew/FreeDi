@@ -29,6 +29,7 @@
 using namespace mu::notation;
 using namespace mu::actions;
 using namespace mu::ui;
+using namespace mu::uicomponents;
 
 static const QString TOOLBAR_NAME("noteInput");
 
@@ -94,11 +95,11 @@ QVariant NoteInputBarModel::data(const QModelIndex& index, int role) const
         return QVariant();
     }
 
-    const MenuItem& item = items()[row];
+    const MenuItem* item = items()[row];
     switch (role) {
-    case SubitemsRole: return subitems(item.code);
-    case IsMenuSecondaryRole: return isMenuSecondary(item.code);
+    case IsMenuSecondaryRole: return isMenuSecondary(item->action().code);
     case OrderRole: return row;
+    case SectionRole: return item->section();
     default: return AbstractMenuModel::data(index, role);
     }
 }
@@ -108,13 +109,13 @@ QHash<int, QByteArray> NoteInputBarModel::roleNames() const
     QHash<int, QByteArray> roles = AbstractMenuModel::roleNames();
     roles[IsMenuSecondaryRole] = "isMenuSecondary";
     roles[OrderRole] = "order";
+    roles[SectionRole] = "section";
 
     return roles;
 }
 
 void NoteInputBarModel::load()
 {
-    AbstractMenuModel::load();
     MenuItemList items;
 
     ToolConfig noteInputConfig = uiConfiguration()->toolConfig(TOOLBAR_NAME);
@@ -133,7 +134,15 @@ void NoteInputBarModel::load()
             continue;
         }
 
-        MenuItem item = makeActionItem(uiactionsRegister()->action(citem.action), QString::number(section));
+        MenuItemList subitems;
+        if (isNoteInputModeAction(citem.action)) {
+            subitems = makeNoteInputMethodItems();
+        } else if (citem.action == TUPLET_ACTION_CODE) {
+            subitems = makeTupletItems();
+        }
+
+        MenuItem* item = makeActionItem(uiActionsRegister()->action(citem.action), QString::number(section), subitems);
+
         items << item;
     }
 
@@ -141,13 +150,7 @@ void NoteInputBarModel::load()
     setItems(items);
 
     onNotationChanged();
-}
-
-void NoteInputBarModel::onActionsStateChanges(const actions::ActionCodeList& codes)
-{
-    UNUSED(codes);
-    notifyAboutTupletItemChanged();
-    notifyAboutAddItemChanged();
+    AbstractMenuModel::load();
 }
 
 int NoteInputBarModel::findNoteInputModeItemIndex() const
@@ -155,7 +158,7 @@ int NoteInputBarModel::findNoteInputModeItemIndex() const
     const MenuItemList& items = this->items();
 
     for (int i = 0; i < items.size(); i++) {
-        if (isNoteInputModeAction(items[i].code)) {
+        if (isNoteInputModeAction(items[i]->action().code)) {
             return i;
         }
     }
@@ -182,20 +185,43 @@ void NoteInputBarModel::onNotationChanged()
     updateState();
 }
 
+void NoteInputBarModel::updateItemStateChecked(MenuItem* item, bool checked)
+{
+    if (!item) {
+        return;
+    }
+
+    UiActionState state = item->state();
+    state.checked = checked;
+    item->setState(state);
+}
+
+void NoteInputBarModel::updateItemStateEnabled(MenuItem* item, bool enabled)
+{
+    if (!item) {
+        return;
+    }
+
+    UiActionState state = item->state();
+    state.enabled = enabled;
+    item->setState(state);
+}
+
 void NoteInputBarModel::updateState()
 {
     bool enabled = notation() && !playbackController()->isPlaying();
 
-    for (MenuItem& item : items()) {
-        item.state.enabled = enabled;
-        item.state.checked = false;
+    for (int i = 0; i < rowCount(); ++i) {
+        MenuItem& item = this->item(i);
+        UiActionState state = item.state();
+        state.checked = false;
+        state.enabled = enabled;
+        item.setState(state);
     }
 
     if (enabled) {
         updateNoteInputState();
     }
-
-    emit dataChanged(index(0), index(rowCount() - 1));
 }
 
 void NoteInputBarModel::updateNoteInputState()
@@ -210,6 +236,8 @@ void NoteInputBarModel::updateNoteInputState()
     updateVoicesState();
     updateArticulationsState();
     updateRestState();
+    updateTupletState();
+    updateAddState();
 }
 
 void NoteInputBarModel::updateNoteInputModeState()
@@ -219,21 +247,23 @@ void NoteInputBarModel::updateNoteInputModeState()
         return;
     }
 
-    MenuItemList& items = this->items();
-    MenuItem& item = items[noteInputModeIndex];
+    MenuItem& item = this->item(noteInputModeIndex);
 
-    QString currentSection = item.section;
-    item = makeActionItem(currentNoteInputModeAction(), currentSection);
-    item.state.checked = isNoteInputMode();
+    QString currentSection = item.section();
+    MenuItemList subitems = makeNoteInputMethodItems();
 
-    emit dataChanged(index(noteInputModeIndex), index(noteInputModeIndex));
+    item.setAction(currentNoteInputModeAction());
+    item.setSection(currentSection);
+    item.setSubitems(subitems);
+
+    updateItemStateChecked(&item, isNoteInputMode());
 }
 
 void NoteInputBarModel::updateNoteDotState()
 {
-    static ActionCodeList dotActions = {
+    static const ActionCodeList dotActions = {
         "pad-dot",
-        "pad-dotdot",
+        "pad-dot2",
         "pad-dot3",
         "pad-dot4"
     };
@@ -241,13 +271,13 @@ void NoteInputBarModel::updateNoteDotState()
     int durationDots = noteInputState().duration.dots();
 
     for (const ActionCode& actionCode: dotActions) {
-        findItem(actionCode).state.checked = durationDots == NotationUiActions::actionDotCount(actionCode);
+        updateItemStateChecked(&findItem(actionCode), durationDots == NotationUiActions::actionDotCount(actionCode));
     }
 }
 
 void NoteInputBarModel::updateNoteDurationState()
 {
-    static ActionCodeList noteActions = {
+    static const ActionCodeList noteActions = {
         "note-longa",
         "note-breve",
         "pad-note-1",
@@ -265,13 +295,13 @@ void NoteInputBarModel::updateNoteDurationState()
 
     DurationType durationType = resolveCurrentDurationType();
     for (const ActionCode& actionCode: noteActions) {
-        findItem(actionCode).state.checked = durationType == NotationUiActions::actionDurationType(actionCode);
+        updateItemStateChecked(&findItem(actionCode), durationType == NotationUiActions::actionDurationType(actionCode));
     }
 }
 
 void NoteInputBarModel::updateNoteAccidentalState()
 {
-    static ActionCodeList accidentalActions = {
+    static const ActionCodeList accidentalActions = {
         "flat2",
         "flat",
         "nat",
@@ -282,7 +312,7 @@ void NoteInputBarModel::updateNoteAccidentalState()
     AccidentalType accidentalType = noteInputState().accidentalType;
 
     for (const ActionCode& actionCode: accidentalActions) {
-        findItem(actionCode).state.checked = accidentalType == NotationUiActions::actionAccidentalType(actionCode);
+        updateItemStateChecked(&findItem(actionCode), accidentalType == NotationUiActions::actionAccidentalType(actionCode));
     }
 }
 
@@ -302,17 +332,17 @@ void NoteInputBarModel::updateTieState()
         }
     }
 
-    findItem("tie").state.checked = checked;
+    updateItemStateChecked(&findItem(codeFromQString("tie")), checked); // todo
 }
 
 void NoteInputBarModel::updateSlurState()
 {
-    findItem("add-slur").state.checked = resolveSlurSelected();
+    updateItemStateChecked(&findItem(codeFromQString("add-slur")), notation()->elements()->msScore()->inputState().slur() != nullptr);
 }
 
 void NoteInputBarModel::updateVoicesState()
 {
-    static ActionCodeList voiceActions {
+    static const ActionCodeList voiceActions {
         "voice-1",
         "voice-2",
         "voice-3",
@@ -322,13 +352,13 @@ void NoteInputBarModel::updateVoicesState()
     int currentVoice = resolveCurrentVoiceIndex();
 
     for (const ActionCode& actionCode: voiceActions) {
-        findItem(actionCode).state.checked = currentVoice == NotationUiActions::actionVoice(actionCode);
+        updateItemStateChecked(&findItem(actionCode), currentVoice == NotationUiActions::actionVoice(actionCode));
     }
 }
 
 void NoteInputBarModel::updateArticulationsState()
 {
-    static ActionCodeList articulationActions {
+    static const ActionCodeList articulationActions {
         "add-marcato",
         "add-sforzato",
         "add-tenuto",
@@ -343,13 +373,23 @@ void NoteInputBarModel::updateArticulationsState()
     };
 
     for (const ActionCode& actionCode: articulationActions) {
-        findItem(actionCode).state.checked = isArticulationSelected(NotationUiActions::actionArticulationSymbolId(actionCode));
+        updateItemStateChecked(&findItem(actionCode), isArticulationSelected(NotationUiActions::actionArticulationSymbolId(actionCode)));
     }
 }
 
 void NoteInputBarModel::updateRestState()
 {
-    findItem("pad-rest").state.checked = resolveRestSelected();
+    updateItemStateChecked(&findItem(ActionCode("pad-rest")), resolveRestSelected());
+}
+
+void NoteInputBarModel::updateTupletState()
+{
+    updateItemStateEnabled(&findItem(ActionCode(TUPLET_ACTION_CODE)), resolveTupletEnabled());
+}
+
+void NoteInputBarModel::updateAddState()
+{
+    findItem(ActionCode(ADD_ACTION_CODE)).setSubitems(makeAddItems());
 }
 
 int NoteInputBarModel::resolveCurrentVoiceIndex() const
@@ -368,11 +408,22 @@ int NoteInputBarModel::resolveCurrentVoiceIndex() const
         return INVALID_VOICE;
     }
 
-    for (const Element* element: selection()->elements()) {
-        return element->voice();
+    std::vector<EngravingItem*> selectedElements = selection()->elements();
+    if (selectedElements.empty()) {
+        return INVALID_VOICE;
     }
 
-    return INVALID_VOICE;
+    int voice = INVALID_VOICE;
+    for (const EngravingItem* element : selection()->elements()) {
+        int elementVoice = element->voice();
+        if (elementVoice != voice && voice != INVALID_VOICE) {
+            return INVALID_VOICE;
+        }
+
+        voice = element->voice();
+    }
+
+    return voice;
 }
 
 std::set<SymbolId> NoteInputBarModel::resolveCurrentArticulations() const
@@ -395,13 +446,13 @@ std::set<SymbolId> NoteInputBarModel::resolveCurrentArticulations() const
             result.insert(articulation->symId());
         }
 
-        result = Ms::flipArticulations(result, Ms::Placement::ABOVE);
+        result = Ms::flipArticulations(result, Ms::PlacementV::ABOVE);
         return Ms::splitArticulations(result);
     };
 
     std::set<SymbolId> result;
     bool isFirstNote = true;
-    for (const Element* element: selection()->elements()) {
+    for (const EngravingItem* element: selection()->elements()) {
         if (!element->isNote()) {
             continue;
         }
@@ -440,7 +491,7 @@ bool NoteInputBarModel::resolveRestSelected() const
         return false;
     }
 
-    for (const Element* element: selection()->elements()) {
+    for (const EngravingItem* element: selection()->elements()) {
         if (!element->isRest()) {
             return false;
         }
@@ -471,7 +522,7 @@ DurationType NoteInputBarModel::resolveCurrentDurationType() const
 
     DurationType result = INVALID_DURATION_TYPE;
     bool isFirstElement = true;
-    for (const Element* element: selection()->elements()) {
+    for (const EngravingItem* element: selection()->elements()) {
         const ChordRest* chordRest = elementToChordRest(element);
         if (!chordRest) {
             continue;
@@ -488,32 +539,18 @@ DurationType NoteInputBarModel::resolveCurrentDurationType() const
     return result;
 }
 
-bool NoteInputBarModel::resolveSlurSelected() const
+bool NoteInputBarModel::resolveTupletEnabled() const
 {
-    if (!noteInput() || !selection()) {
-        return false;
-    }
-
     if (isNoteInputMode()) {
-        return noteInputState().withSlur;
+        return true;
     }
 
-    if (selection()->isNone() || selection()->isRange()) {
+    if (!selection()) {
         return false;
     }
 
-    if (selection()->elements().empty()) {
-        return false;
-    }
-
-    for (const Element* element: selection()->elements()) {
-        const ChordRest* chordRest = elementToChordRest(element);
-        if (!chordRest) {
-            continue;
-        }
-
-        Ms::Slur* slur = chordRest->slur();
-        if (slur) {
+    for (const EngravingItem* element: selection()->elements()) {
+        if (element->isRest() || element->isNote()) {
             return true;
         }
     }
@@ -529,53 +566,49 @@ bool NoteInputBarModel::isNoteInputModeAction(const ActionCode& actionCode) cons
 UiAction NoteInputBarModel::currentNoteInputModeAction() const
 {
     NoteInputMethod method = noteInputState().method;
-    return uiactionsRegister()->action(actionCodeForNoteInputMethod(method));
+    return uiActionsRegister()->action(actionCodeForNoteInputMethod(method));
 }
 
-MenuItem NoteInputBarModel::makeActionItem(const UiAction& action, const QString& section)
+MenuItem* NoteInputBarModel::makeActionItem(const UiAction& action, const QString& section, const uicomponents::MenuItemList& subitems)
 {
-    MenuItem item = action;
-    item.section = section;
+    MenuItem* item = new MenuItem(action, this);
+    item->setSection(section);
+    item->setSubitems(subitems);
     return item;
 }
 
-MenuItem NoteInputBarModel::makeAddItem(const QString& section)
+MenuItem* NoteInputBarModel::makeAddItem(const QString& section)
 {
     UiAction addAction(ADD_ACTION_CODE, UiCtxAny, ADD_ACTION_TITLE, ADD_ACTION_ICON_CODE);
-    return makeActionItem(addAction, section);
+    return makeActionItem(addAction, section, makeAddItems());
 }
 
-QVariantList NoteInputBarModel::subitems(const ActionCode& actionCode) const
+MenuItemList NoteInputBarModel::makeSubitems(const ActionCode& actionCode)
 {
     MenuItemList items;
     if (isNoteInputModeAction(actionCode)) {
-        items = noteInputMethodItems();
+        items = makeNoteInputMethodItems();
     } else if (actionCode == TUPLET_ACTION_CODE) {
-        items = tupletItems();
+        items = makeTupletItems();
     } else if (actionCode == ADD_ACTION_CODE) {
-        items = addItems();
+        items = makeAddItems();
     }
 
-    QVariantList result;
-    for (const MenuItem& item: items) {
-        result << item.toMap();
-    }
-
-    return result;
+    return items;
 }
 
-MenuItemList NoteInputBarModel::noteInputMethodItems() const
+MenuItemList NoteInputBarModel::makeNoteInputMethodItems()
 {
     MenuItemList items;
     actions::ActionCode currentInputMethod = currentNoteInputModeAction().code;
 
     for (const auto& pair : noteInputModeActions) {
         ActionCode actionCode = pair.first;
-        MenuItem item = makeMenuItem(actionCode);
-        item.selectable = true;
+        MenuItem* item = makeMenuItem(actionCode);
+        item->setSelectable(true);
 
         if (actionCode == currentInputMethod) {
-            item.selected = true;
+            item->setSelected(true);
         }
 
         items.push_back(item);
@@ -584,7 +617,7 @@ MenuItemList NoteInputBarModel::noteInputMethodItems() const
     return items;
 }
 
-MenuItemList NoteInputBarModel::tupletItems() const
+MenuItemList NoteInputBarModel::makeTupletItems()
 {
     MenuItemList items = {
         makeMenuItem("duplet"),
@@ -601,21 +634,21 @@ MenuItemList NoteInputBarModel::tupletItems() const
     return items;
 }
 
-MenuItemList NoteInputBarModel::addItems() const
+MenuItemList NoteInputBarModel::makeAddItems()
 {
     MenuItemList items = {
-        makeMenu(qtrc("notation", "Notes"), notesItems()),
-        makeMenu(qtrc("notation", "Intervals"), intervalsItems()),
-        makeMenu(qtrc("notation", "Measures"), measuresItems()),
-        makeMenu(qtrc("notation", "Frames"), framesItems()),
-        makeMenu(qtrc("notation", "Text"), textItems()),
-        makeMenu(qtrc("notation", "Lines"), linesItems())
+        makeMenu(qtrc("notation", "Notes"), makeNotesItems()),
+        makeMenu(qtrc("notation", "Intervals"), makeIntervalsItems()),
+        makeMenu(qtrc("notation", "Measures"), makeMeasuresItems()),
+        makeMenu(qtrc("notation", "Frames"), makeFramesItems()),
+        makeMenu(qtrc("notation", "Text"), makeTextItems()),
+        makeMenu(qtrc("notation", "Lines"), makeLinesItems())
     };
 
     return items;
 }
 
-MenuItemList NoteInputBarModel::notesItems() const
+MenuItemList NoteInputBarModel::makeNotesItems()
 {
     MenuItemList items {
         makeMenuItem("note-c"),
@@ -638,7 +671,7 @@ MenuItemList NoteInputBarModel::notesItems() const
     return items;
 }
 
-MenuItemList NoteInputBarModel::intervalsItems() const
+MenuItemList NoteInputBarModel::makeIntervalsItems()
 {
     MenuItemList items {
         makeMenuItem("interval1"),
@@ -664,7 +697,7 @@ MenuItemList NoteInputBarModel::intervalsItems() const
     return items;
 }
 
-MenuItemList NoteInputBarModel::measuresItems() const
+MenuItemList NoteInputBarModel::makeMeasuresItems()
 {
     MenuItemList items {
         makeMenuItem("insert-measure"),
@@ -677,7 +710,7 @@ MenuItemList NoteInputBarModel::measuresItems() const
     return items;
 }
 
-MenuItemList NoteInputBarModel::framesItems() const
+MenuItemList NoteInputBarModel::makeFramesItems()
 {
     MenuItemList items {
         makeMenuItem("insert-hbox"),
@@ -692,7 +725,7 @@ MenuItemList NoteInputBarModel::framesItems() const
     return items;
 }
 
-MenuItemList NoteInputBarModel::textItems() const
+MenuItemList NoteInputBarModel::makeTextItems()
 {
     MenuItemList items {
         makeMenuItem("title-text"),
@@ -720,7 +753,7 @@ MenuItemList NoteInputBarModel::textItems() const
     return items;
 }
 
-MenuItemList NoteInputBarModel::linesItems() const
+MenuItemList NoteInputBarModel::makeLinesItems()
 {
     MenuItemList items {
         makeMenuItem("add-slur"),
@@ -741,26 +774,6 @@ bool NoteInputBarModel::isMenuSecondary(const ActionCode& actionCode) const
     }
 
     return false;
-}
-
-void NoteInputBarModel::notifyAboutTupletItemChanged()
-{
-    int tupletItemIndex = itemIndex(TUPLET_ACTION_CODE);
-    if (tupletItemIndex == INVALID_ITEM_INDEX) {
-        return;
-    }
-
-    emit dataChanged(index(tupletItemIndex), index(tupletItemIndex));
-}
-
-void NoteInputBarModel::notifyAboutAddItemChanged()
-{
-    int addItemIndex = itemIndex(ADD_ACTION_CODE);
-    if (addItemIndex == INVALID_ITEM_INDEX) {
-        return;
-    }
-
-    emit dataChanged(index(addItemIndex), index(addItemIndex));
 }
 
 INotationPtr NoteInputBarModel::notation() const
@@ -798,7 +811,7 @@ NoteInputState NoteInputBarModel::noteInputState() const
     return noteInput() ? noteInput()->state() : NoteInputState();
 }
 
-const ChordRest* NoteInputBarModel::elementToChordRest(const Element* element) const
+const ChordRest* NoteInputBarModel::elementToChordRest(const EngravingItem* element) const
 {
     if (!element) {
         return nullptr;

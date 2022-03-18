@@ -45,7 +45,8 @@ AppWindow {
     }
 
     Component.onCompleted: {
-        framelessWindowModel.init(this)
+        framelessWindowModel.init()
+        window.init()
     }
 
     AppTitleBar {
@@ -55,8 +56,12 @@ AppWindow {
         anchors.left: parent.left
         anchors.right: parent.right
 
-        height: 48
+        height: 32
         title: root.title
+
+        windowVisibility: root.visibility
+
+        appWindow: root
 
         onShowWindowMinimizedRequested: {
             root.showMinimized()
@@ -78,5 +83,9 @@ AppWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
+
+        onWindowLoaded: {
+            root.visible = true
+        }
     }
 }

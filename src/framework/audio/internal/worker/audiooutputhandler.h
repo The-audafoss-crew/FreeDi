@@ -26,6 +26,7 @@
 #include "modularity/ioc.h"
 #include "async/asyncable.h"
 
+#include "ifxresolver.h"
 #include "iaudiooutput.h"
 #include "igettracksequence.h"
 
@@ -33,6 +34,8 @@ namespace mu::audio {
 class Mixer;
 class AudioOutputHandler : public IAudioOutput, public async::Asyncable
 {
+    INJECT(audio, fx::IFxResolver, fxResolver)
+
 public:
     explicit AudioOutputHandler(IGetTrackSequence* getSequence);
 
@@ -44,8 +47,10 @@ public:
     void setMasterOutputParams(const AudioOutputParams& params) override;
     async::Channel<AudioOutputParams> masterOutputParamsChanged() const override;
 
-    async::Channel<audioch_t, float> masterSignalAmplitudeChanged() const override;
-    async::Channel<audioch_t, volume_dbfs_t> masterVolumePressureChanged() const override;
+    async::Promise<AudioResourceMetaList> availableOutputResources() const override;
+
+    async::Promise<AudioSignalChanges> signalChanges(const TrackSequenceId sequenceId, const TrackId trackId) const override;
+    async::Promise<AudioSignalChanges> masterSignalChanges() const override;
 
 private:
     std::shared_ptr<Mixer> mixer() const;
@@ -56,8 +61,6 @@ private:
     IGetTrackSequence* m_getSequence = nullptr;
 
     mutable async::Channel<AudioOutputParams> m_masterOutputParamsChanged;
-    mutable async::Channel<audioch_t, float> m_masterSignalAmplitudeChanged;
-    mutable async::Channel<audioch_t, volume_dbfs_t> m_masterVolumePressureChanged;
     mutable async::Channel<TrackSequenceId, TrackId, AudioOutputParams> m_outputParamsChanged;
 };
 }

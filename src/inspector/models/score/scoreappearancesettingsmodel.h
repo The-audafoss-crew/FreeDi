@@ -24,13 +24,30 @@
 
 #include "models/abstractinspectormodel.h"
 
+#include "async/asyncable.h"
+
 namespace mu::inspector {
 class ScoreAppearanceSettingsModel : public AbstractInspectorModel
 {
     Q_OBJECT
 
+    Q_PROPERTY(bool hideEmptyStaves READ hideEmptyStaves WRITE setHideEmptyStaves NOTIFY styleChanged)
+    Q_PROPERTY(
+        bool dontHideEmptyStavesInFirstSystem READ dontHideEmptyStavesInFirstSystem WRITE setDontHideEmptyStavesInFirstSystem NOTIFY styleChanged)
+    Q_PROPERTY(
+        bool showBracketsWhenSpanningSingleStaff READ showBracketsWhenSpanningSingleStaff WRITE setShowBracketsWhenSpanningSingleStaff NOTIFY styleChanged)
+
 public:
     explicit ScoreAppearanceSettingsModel(QObject* parent, IElementRepositoryService* repository);
+
+    bool hideEmptyStaves() const;
+    void setHideEmptyStaves(bool hide);
+
+    bool dontHideEmptyStavesInFirstSystem() const;
+    void setDontHideEmptyStavesInFirstSystem(bool dont);
+
+    bool showBracketsWhenSpanningSingleStaff() const;
+    void setShowBracketsWhenSpanningSingleStaff(bool show);
 
     Q_INVOKABLE void showPageSettings();
     Q_INVOKABLE void showStyleSettings();
@@ -40,7 +57,10 @@ public:
     virtual void loadProperties() override { }
     virtual void resetProperties() override { }
 
-    bool hasAcceptableElements() const override;
+    bool isEmpty() const override;
+
+signals:
+    void styleChanged();
 };
 }
 

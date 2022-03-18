@@ -25,6 +25,7 @@
 #include <cmath>
 #include <QtMath>
 #include <QRegularExpression>
+#include <QDebug>
 
 #include "translation.h"
 
@@ -44,7 +45,6 @@
 #include "key.h"
 #include "sig.h"
 #include "tuplet.h"
-#include "symid.h"
 
 using namespace mu;
 
@@ -236,7 +236,7 @@ Segment* Score::tick2rightSegment(const Fraction& tick, bool useMMrest) const
 {
     Measure* m = useMMrest ? tick2measureMM(tick) : tick2measure(tick);
     if (m == 0) {
-        qDebug("tick2nearestSegment(): not found tick %d", tick.ticks());
+        //qDebug("tick2nearestSegment(): not found tick %d", tick.ticks());
         return 0;
     }
     // loop over all segments
@@ -252,7 +252,7 @@ Segment* Score::tick2rightSegment(const Fraction& tick, bool useMMrest) const
 //   tick2beatType
 //---------------------------------------------------------
 
-BeatType Score::tick2beatType(const Fraction& tick)
+BeatType Score::tick2beatType(const Fraction& tick) const
 {
     Measure* m = tick2measure(tick);
     Fraction msrTick = m->tick();
@@ -360,7 +360,7 @@ Note* nextChordNote(Note* note)
     // TODO : limit to same instrument, not simply to same staff!
     Segment* seg   = note->chord()->segment()->nextCR(track, true);
     while (seg) {
-        Element* targetElement = seg->elementAt(track);
+        EngravingItem* targetElement = seg->elementAt(track);
         // if a chord exists in the same track, return its top note
         if (targetElement && targetElement->isChord()) {
             return toChord(targetElement)->upNote();
@@ -386,7 +386,7 @@ Note* prevChordNote(Note* note)
     Segment* seg   = note->chord()->segment()->prev1();
     while (seg) {
         if (seg->segmentType() == SegmentType::ChordRest) {
-            Element* targetElement = seg->elementAt(track);
+            EngravingItem* targetElement = seg->elementAt(track);
             // if a chord exists in the same track, return its top note
             if (targetElement && targetElement->isChord()) {
                 return toChord(targetElement)->upNote();
@@ -695,34 +695,6 @@ int patchVersion()
 }
 
 //---------------------------------------------------------
-//   compareVersion
-///  Up to 4 digits X.X.X.X
-///  Each digit can be double XX.XX.XX.XX
-///  return true if v1 < v2
-//---------------------------------------------------------
-
-bool compareVersion(QString v1, QString v2)
-{
-    auto v1l = v1.split(".");
-    auto v2l = v2.split(".");
-    int ma = qPow(100, qMax(v1l.size(), v2l.size()));
-    int m = ma;
-    int vv1 = 0;
-    for (int i = 0; i < v1l.size(); i++) {
-        vv1 += (m * v1l[i].toInt());
-        m /= 100;
-    }
-    m = ma;
-    int vv2 = 0;
-    for (int i = 0; i < v2l.size(); i++) {
-        vv2 += (m * v2l[i].toInt());
-        m /= 100;
-    }
-
-    return vv1 < vv2;
-}
-
-//---------------------------------------------------------
 //   diatonicUpDown
 //    used to find the second note of a trill, mordent etc.
 //    key  -7 ... +7
@@ -831,7 +803,7 @@ Note* searchTieNote(Note* note)
     int etrack   = strack + part->staves()->size() * VOICES;
 
     if (chord->isGraceBefore()) {
-        chord = toChord(chord->parent());
+        chord = toChord(chord->explicitParent());
 
         // try to tie to next grace note
 
@@ -855,7 +827,7 @@ Note* searchTieNote(Note* note)
         // grace after
         // we will try to tie to note in next normal chord, below
         // meanwhile, set chord to parent chord so the endTick calculation will make sense
-        chord = toChord(chord->parent());
+        chord = toChord(chord->explicitParent());
     } else {
         // normal chord
         // try to tie to grace note after if present
@@ -883,7 +855,7 @@ Note* searchTieNote(Note* note)
             continue;
         }
         for (int track = strack; track < etrack; ++track) {
-            Element* e = seg->element(track);
+            EngravingItem* e = seg->element(track);
             if (e == 0 || !e->isChord()) {
                 continue;
             }
@@ -940,7 +912,7 @@ Note* searchTieNote114(Note* note)
 
     while ((seg = seg->next1(SegmentType::ChordRest))) {
         for (int track = strack; track < etrack; ++track) {
-            Element* e = seg->element(track);
+            EngravingItem* e = seg->element(track);
             if (e == 0 || (!e->isChord()) || (e->track() != chord->track())) {
                 continue;
             }
@@ -1052,17 +1024,13 @@ Segment* skipTuplet(Tuplet* tuplet)
 }
 
 //---------------------------------------------------------
-//   toTimeSigString
+//   timeSigSymIdsFromString
 //    replace ascii with bravura symbols
 //---------------------------------------------------------
 
-std::vector<SymId> toTimeSigString(const QString& s)
+SymIdList timeSigSymIdsFromString(const QString& string)
 {
-    struct Dict {
-        QChar code;
-        SymId id;
-    };
-    static const std::vector<Dict> dict = {
+    static const QHash<QChar, SymId> dict = {
         { 43,    SymId::timeSigPlusSmall },             // '+'
         { 48,    SymId::timeSig0 },                     // '0'
         { 49,    SymId::timeSig1 },                     // '1'
@@ -1093,16 +1061,14 @@ std::vector<SymId> toTimeSigString(const QString& s)
         { 59674, SymId::mensuralProlation11 },
     };
 
-    std::vector<SymId> d;
-    for (auto c : s) {
-        for (const Dict& e : dict) {
-            if (c == e.code) {
-                d.push_back(e.id);
-                break;
-            }
+    SymIdList list;
+    for (const QChar& c : string) {
+        SymId sym = dict.value(c, SymId::noSym);
+        if (sym != SymId::noSym) {
+            list.push_back(sym);
         }
     }
-    return d;
+    return list;
 }
 
 //---------------------------------------------------------

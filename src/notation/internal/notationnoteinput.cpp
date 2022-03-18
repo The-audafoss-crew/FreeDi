@@ -21,7 +21,7 @@
  */
 #include "notationnoteinput.h"
 
-#include "libmscore/score.h"
+#include "libmscore/masterscore.h"
 #include "libmscore/input.h"
 #include "libmscore/staff.h"
 #include "libmscore/note.h"
@@ -33,6 +33,8 @@
 
 #include "scorecallbacks.h"
 
+#include "log.h"
+
 using namespace mu::notation;
 using namespace mu::async;
 
@@ -40,6 +42,8 @@ NotationNoteInput::NotationNoteInput(const IGetScore* getScore, INotationInterac
     : m_getScore(getScore), m_interaction(interaction), m_undoStack(undoStack)
 {
     m_scoreCallbacks = new ScoreCallbacks();
+    m_scoreCallbacks->setGetScore(getScore);
+    m_scoreCallbacks->setNotationInteraction(interaction);
 
     m_interaction->selectionChanged().onNotify(this, [this]() {
         if (!isNoteInputMode()) {
@@ -60,7 +64,7 @@ bool NotationNoteInput::isNoteInputMode() const
 
 NoteInputState NotationNoteInput::state() const
 {
-    Ms::InputState& inputState = score()->inputState();
+    const Ms::InputState& inputState = score()->inputState();
 
     NoteInputState noteInputState;
     noteInputState.method = inputState.noteEntryMethod();
@@ -69,50 +73,31 @@ NoteInputState NotationNoteInput::state() const
     noteInputState.articulationIds = articulationIds();
     noteInputState.withSlur = inputState.slur() != nullptr;
     noteInputState.currentVoiceIndex = inputState.voice();
+    noteInputState.currentTrack = inputState.track();
+    noteInputState.drumset = inputState.drumset();
     noteInputState.isRest = inputState.rest();
+    noteInputState.staffGroup = inputState.staffGroup();
 
     return noteInputState;
 }
 
+//! NOTE Coped from `void ScoreView::startNoteEntry()`
 void NotationNoteInput::startNoteInput()
 {
-    //! NOTE Coped from `void ScoreView::startNoteEntry()`
-    Ms::InputState& is = score()->inputState();
-    is.setSegment(0);
+    TRACEFUNC;
 
-    //! TODO Find out what does and why.
-    Element* el = score()->selection().element();
-    if (!el) {
-        el = score()->selection().firstChordRest();
+    if (isNoteInputMode()) {
+        return;
     }
 
-    if (el == nullptr
-        || (el->type() != ElementType::CHORD && el->type() != ElementType::REST && el->type() != ElementType::NOTE)) {
-        // if no note/rest is selected, start with voice 0
-        int track = is.track() == -1 ? 0 : (is.track() / VOICES) * VOICES;
-        // try to find an appropriate measure to start in
-        Fraction tick = el ? el->tick() : Fraction(0, 1);
-        el = score()->searchNote(tick, track);
-        if (!el) {
-            el = score()->searchNote(Fraction(0, 1), track);
-        }
-    }
-
+    Ms::EngravingItem* el = resolveNoteInputStartPosition();
     if (!el) {
         return;
     }
 
-    if (el->type() == ElementType::CHORD) {
-        Ms::Chord* c = static_cast<Ms::Chord*>(el);
-        Ms::Note* note = c->selectedNote();
-        if (note == 0) {
-            note = c->upNote();
-        }
-        el = note;
-    }
-    //! ---
-
     m_interaction->select({ el }, SelectType::SINGLE, 0);
+
+    Ms::InputState& is = score()->inputState();
 
     // Not strictly necessary, just for safety
     if (is.noteEntryMethod() == Ms::NoteEntryMethod::UNKNOWN) {
@@ -120,8 +105,8 @@ void NotationNoteInput::startNoteInput()
     }
 
     Duration d(is.duration());
-    if (!d.isValid() || d.isZero() || d.type() == Duration::DurationType::V_MEASURE) {
-        is.setDuration(Duration(Duration::DurationType::V_QUARTER));
+    if (!d.isValid() || d.isZero() || d.type() == DurationType::V_MEASURE) {
+        is.setDuration(Duration(DurationType::V_QUARTER));
     }
     is.setAccidentalType(Ms::AccidentalType::NONE);
 
@@ -133,7 +118,7 @@ void NotationNoteInput::startNoteInput()
     score()->update();
     //! ---
 
-    Staff* staff = score()->staff(is.track() / VOICES);
+    const Staff* staff = score()->staff(is.track() / Ms::VOICES);
     switch (staff->staffType(is.tick())->group()) {
     case Ms::StaffGroup::STANDARD:
         break;
@@ -152,12 +137,64 @@ void NotationNoteInput::startNoteInput()
     }
 
     notifyAboutStateChanged();
+
+    m_scoreCallbacks->adjustCanvasPosition(el, false);
+}
+
+Ms::EngravingItem* NotationNoteInput::resolveNoteInputStartPosition() const
+{
+    EngravingItem* el = score()->selection().element();
+    if (!el) {
+        el = score()->selection().firstChordRest();
+    }
+
+    const Ms::InputState& is = score()->inputState();
+
+    if (!el) {
+        if (const Ms::Segment* segment = is.lastSegment()) {
+            el = segment->element(is.track());
+        }
+    }
+
+    if (el == nullptr
+        || (el->type() != ElementType::CHORD && el->type() != ElementType::REST && el->type() != ElementType::NOTE)) {
+        // if no note/rest is selected, start with voice 0
+        int track = is.track() == -1 ? 0 : (is.track() / Ms::VOICES) * Ms::VOICES;
+        // try to find an appropriate measure to start in
+        Fraction tick = el ? el->tick() : Fraction(0, 1);
+        el = score()->searchNote(tick, track);
+        if (!el) {
+            el = score()->searchNote(Fraction(0, 1), track);
+        }
+    }
+
+    if (!el) {
+        return nullptr;
+    }
+
+    if (el->type() == ElementType::CHORD) {
+        Ms::Chord* c = static_cast<Ms::Chord*>(el);
+        Ms::Note* note = c->selectedNote();
+        if (note == 0) {
+            note = c->upNote();
+        }
+        el = note;
+    }
+
+    return el;
 }
 
 void NotationNoteInput::endNoteInput()
 {
+    TRACEFUNC;
+
+    if (!isNoteInputMode()) {
+        return;
+    }
+
     Ms::InputState& is = score()->inputState();
     is.setNoteEntryMode(false);
+
     if (is.slur()) {
         const std::vector<Ms::SpannerSegment*>& el = is.slur()->spannerSegments();
         if (!el.empty()) {
@@ -166,19 +203,22 @@ void NotationNoteInput::endNoteInput()
         is.setSlur(0);
     }
 
-    notifyAboutStateChanged();
+    updateInputState();
 }
 
 void NotationNoteInput::toggleNoteInputMethod(NoteInputMethod method)
 {
-    Ms::InputState& inputState = score()->inputState();
-    inputState.setNoteEntryMethod(method);
+    TRACEFUNC;
+
+    score()->inputState().setNoteEntryMethod(method);
 
     notifyAboutStateChanged();
 }
 
 void NotationNoteInput::addNote(NoteName noteName, NoteAddingMode addingMode)
 {
+    TRACEFUNC;
+
     Ms::EditData editData(m_scoreCallbacks);
 
     startEdit();
@@ -188,11 +228,14 @@ void NotationNoteInput::addNote(NoteName noteName, NoteAddingMode addingMode)
     score()->cmdAddPitch(editData, inote, addToUpOnCurrentChord, insertNewChord);
     apply();
 
+    notifyNoteAddedChanged();
     notifyAboutStateChanged();
 }
 
 void NotationNoteInput::padNote(const Pad& pad)
 {
+    TRACEFUNC;
+
     Ms::EditData editData(m_scoreCallbacks);
 
     startEdit();
@@ -202,17 +245,42 @@ void NotationNoteInput::padNote(const Pad& pad)
     notifyAboutStateChanged();
 }
 
-void NotationNoteInput::putNote(const QPointF& pos, bool replace, bool insert)
+void NotationNoteInput::putNote(const PointF& pos, bool replace, bool insert)
 {
+    TRACEFUNC;
+
     startEdit();
-    score()->putNote(PointF::fromQPointF(pos), replace, insert);
+    score()->putNote(pos, replace, insert);
     apply();
 
     notifyNoteAddedChanged();
+    notifyAboutStateChanged();
+
+    if (Ms::ChordRest* chordRest = score()->inputState().cr()) {
+        m_scoreCallbacks->adjustCanvasPosition(chordRest, false);
+    }
+}
+
+void NotationNoteInput::removeNote(const PointF& pos)
+{
+    TRACEFUNC;
+
+    Ms::InputState& inputState = score()->inputState();
+    bool restMode = inputState.rest();
+
+    startEdit();
+    inputState.setRest(!restMode);
+    score()->putNote(pos, false, false);
+    inputState.setRest(restMode);
+    apply();
+
+    notifyAboutStateChanged();
 }
 
 void NotationNoteInput::setAccidental(AccidentalType accidentalType)
 {
+    TRACEFUNC;
+
     Ms::EditData editData(m_scoreCallbacks);
 
     score()->toggleAccidental(accidentalType, editData);
@@ -222,6 +290,8 @@ void NotationNoteInput::setAccidental(AccidentalType accidentalType)
 
 void NotationNoteInput::setArticulation(SymbolId articulationSymbolId)
 {
+    TRACEFUNC;
+
     Ms::InputState& inputState = score()->inputState();
 
     std::set<SymbolId> articulations = Ms::updateArticulations(
@@ -231,8 +301,18 @@ void NotationNoteInput::setArticulation(SymbolId articulationSymbolId)
     notifyAboutStateChanged();
 }
 
+void NotationNoteInput::setDrumNote(int note)
+{
+    TRACEFUNC;
+
+    score()->inputState().setDrumNote(note);
+    notifyAboutStateChanged();
+}
+
 void NotationNoteInput::setCurrentVoiceIndex(int voiceIndex)
 {
+    TRACEFUNC;
+
     if (!isVoiceIndexValid(voiceIndex)) {
         return;
     }
@@ -248,9 +328,22 @@ void NotationNoteInput::setCurrentVoiceIndex(int voiceIndex)
     notifyAboutStateChanged();
 }
 
-void NotationNoteInput::addTuplet(const TupletOptions& options)
+void NotationNoteInput::resetInputPosition()
 {
     Ms::InputState& inputState = score()->inputState();
+
+    inputState.setTrack(-1);
+    inputState.setString(-1);
+    inputState.setSegment(nullptr);
+
+    notifyAboutStateChanged();
+}
+
+void NotationNoteInput::addTuplet(const TupletOptions& options)
+{
+    TRACEFUNC;
+
+    const Ms::InputState& inputState = score()->inputState();
 
     startEdit();
     score()->expandVoice();
@@ -264,29 +357,31 @@ void NotationNoteInput::addTuplet(const TupletOptions& options)
     notifyAboutStateChanged();
 }
 
-QRectF NotationNoteInput::cursorRect() const
+mu::RectF NotationNoteInput::cursorRect() const
 {
+    TRACEFUNC;
+
     if (!isNoteInputMode()) {
-        return QRectF();
+        return {};
     }
 
-    Ms::InputState& inputState = score()->inputState();
-    Ms::Segment* segment = inputState.segment();
+    const Ms::InputState& inputState = score()->inputState();
+    const Ms::Segment* segment = inputState.segment();
     if (!segment) {
-        return QRectF();
+        return {};
     }
 
     Ms::System* system = segment->measure()->system();
     if (!system) {
-        return QRectF();
+        return {};
     }
 
     int track = inputState.track() == -1 ? 0 : inputState.track();
-    int staffIdx = track / VOICES;
+    int staffIdx = track / Ms::VOICES;
 
-    Staff* staff = score()->staff(staffIdx);
+    const Staff* staff = score()->staff(staffIdx);
     if (!staff) {
-        return QRectF();
+        return {};
     }
 
     constexpr int sideMargin = 4;
@@ -320,11 +415,13 @@ QRectF NotationNoteInput::cursorRect() const
         result.translate(system->page()->pos());
     }
 
-    return result.toQRectF();
+    return result;
 }
 
 void NotationNoteInput::addSlur(Ms::Slur* slur)
 {
+    TRACEFUNC;
+
     Ms::InputState& inputState = score()->inputState();
     inputState.setSlur(slur);
 
@@ -340,21 +437,23 @@ void NotationNoteInput::addSlur(Ms::Slur* slur)
 
 void NotationNoteInput::resetSlur()
 {
+    TRACEFUNC;
+
     Ms::InputState& inputState = score()->inputState();
     Ms::Slur* slur = inputState.slur();
     if (!slur) {
         return;
     }
 
-    startEdit();
-    score()->removeElement(slur);
-    apply();
+    score()->deselect(slur);
 
     addSlur(nullptr);
 }
 
 void NotationNoteInput::addTie()
 {
+    TRACEFUNC;
+
     startEdit();
     score()->cmdAddTie();
     apply();
@@ -389,6 +488,8 @@ void NotationNoteInput::apply()
 
 void NotationNoteInput::updateInputState()
 {
+    TRACEFUNC;
+
     score()->inputState().update(score()->selection());
 
     notifyAboutStateChanged();
@@ -406,6 +507,32 @@ void NotationNoteInput::notifyNoteAddedChanged()
 
 std::set<SymbolId> NotationNoteInput::articulationIds() const
 {
-    Ms::InputState& inputState = score()->inputState();
+    const Ms::InputState& inputState = score()->inputState();
     return Ms::splitArticulations(inputState.articulationIds());
+}
+
+void NotationNoteInput::doubleNoteInputDuration()
+{
+    TRACEFUNC;
+
+    Ms::EditData editData(m_scoreCallbacks);
+
+    startEdit();
+    score()->cmdPadNoteIncreaseTAB(editData);
+    apply();
+
+    notifyAboutStateChanged();
+}
+
+void NotationNoteInput::halveNoteInputDuration()
+{
+    TRACEFUNC;
+
+    Ms::EditData editData(m_scoreCallbacks);
+
+    startEdit();
+    score()->cmdPadNoteDecreaseTAB(editData);
+    apply();
+
+    notifyAboutStateChanged();
 }

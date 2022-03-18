@@ -40,14 +40,24 @@ AppWindow {
     Component.onCompleted: {
         menuModel.load()
 
-        for (var i in menuModel.items) {
-            var item = menuModel.items[i]
+        var items = menuModel.items
+        for (var i in items) {
+            var item = items[i]
             var menu = makeMenu(item)
 
             for (var j in item.subitems) {
                 var menuItem = makeMenuItem(menu, item.subitems[j])
                 menu.addItem(menuItem)
             }
+
+            item.subitemsChanged.connect(function(subitems, menuId) {
+                for (var l in menuBar.menus) {
+                    var menu = menuBar.menus[l]
+                    if (menu.id === menuId) {
+                        menuBar.menus[l].subitems = subitems
+                    }
+                }
+            })
 
             menuBar.addMenu(menu)
         }
@@ -57,11 +67,14 @@ AppWindow {
                 menuBar.menus[i].subitems = menuModel.items[i].subitems
             }
         })
+
+        window.init()
     }
 
     function makeMenu(menuInfo) {
         var menu = menuComponent.createObject(menuBar)
 
+        menu.id = menuInfo.id
         menu.title = menuInfo.title
         menu.enabled = menuInfo.enabled
         menu.subitems = menuInfo.subitems
@@ -72,13 +85,14 @@ AppWindow {
     function makeMenuItem(parentMenu, itemInfo) {
         var menuItem = menuItemComponent.createObject(parentMenu)
 
+        menuItem.id = itemInfo.id
         menuItem.text = itemInfo.title
         menuItem.enabled = itemInfo.enabled
         menuItem.checked = itemInfo.checked
         menuItem.checkable = itemInfo.checkable
-        menuItem.shortcut = itemInfo.shortcut
-        menuItem.actionCode = itemInfo.code
+        menuItem.shortcut = itemInfo.portableShortcuts
         menuItem.separator = !Boolean(itemInfo.title)
+        menuItem.role = itemInfo.role
 
         return menuItem
     }
@@ -87,6 +101,7 @@ AppWindow {
         id: menuComponent
 
         PLATFORM.Menu {
+            property string id: ""
             property var subitems: []
 
             onAboutToShow: {
@@ -102,7 +117,6 @@ AppWindow {
                         addMenu(subMenu)
                     } else {
                         var menuItem = makeMenuItem(this, item)
-                        menuItem.actionIndex = i
 
                         addItem(menuItem)
                     }
@@ -115,16 +129,21 @@ AppWindow {
         id: menuItemComponent
 
         PLATFORM.MenuItem {
-            property string actionCode: ""
-            property int actionIndex: -1
+            property string id: ""
 
             onTriggered: {
-                Qt.callLater(menuModel.handleAction, actionCode, actionIndex)
+                Qt.callLater(menuModel.handleMenuItem, id)
             }
         }
     }
 
     WindowContent {
+        id: window
+
         anchors.fill: parent
+
+        onWindowLoaded: {
+            root.visible = true
+        }
     }
 }

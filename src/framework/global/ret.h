@@ -24,6 +24,9 @@
 #define MU_FRAMEWORK_RET_H
 
 #include <string>
+#include <map>
+#include <any>
+#include <QString>
 
 namespace mu {
 class Ret
@@ -49,8 +52,8 @@ public:
         UiFirst         = 100,
         UiLast          = 199,
 
-        ExtensionsFirst = 200,
-        ExtensionsLast  = 299,
+        PluginsFirst    = 200,
+        PluginsLast     = 299,
 
         AudioFirst      = 300,
         AudioLast       = 399,
@@ -64,8 +67,8 @@ public:
         MidiFirst       = 600,
         MidiLast        = 699,
 
-        LanguagesFirst = 700,
-        LanguagesLast  = 799,
+        LanguagesFirst  = 700,
+        LanguagesLast   = 799,
 
         NotationFirst   = 1000,
         NotationLast    = 1299,
@@ -80,7 +83,10 @@ public:
         WorkspaceLast   = 1599,
 
         LearnFirst      = 1600,
-        LearnLast       = 1699
+        LearnLast       = 1699,
+
+        EngravingFirst  = 2000,
+        EngravingLast   = 2999,
     };
 
     Ret() = default;
@@ -95,8 +101,11 @@ public:
     bool success() const;
     void setText(const std::string& s);
     const std::string& text() const;
+    void setData(const std::string& key, const std::any& val);
+    std::any data(const std::string& key) const;
 
     inline Ret& operator=(int c) { m_code = c; return *this; }
+    inline Ret& operator=(bool arg) { m_code = arg ? int(Code::Ok) : int(Code::UnknownError); return *this; }
     inline operator bool() const {
         return success();
     }
@@ -107,7 +116,13 @@ public:
 private:
     int m_code = int(Code::Undefined);
     std::string m_text;
+    std::map<std::string, std::any> m_data;
 };
+
+inline mu::Ret make_ok()
+{
+    return Ret(static_cast<int>(Ret::Code::Ok));
+}
 
 inline mu::Ret make_ret(Ret::Code e)
 {
@@ -117,6 +132,11 @@ inline mu::Ret make_ret(Ret::Code e)
 inline mu::Ret make_ret(Ret::Code e, const std::string& text)
 {
     return Ret(static_cast<int>(e), text);
+}
+
+inline mu::Ret make_ret(Ret::Code e, const QString& text)
+{
+    return Ret(static_cast<int>(e), text.toStdString());
 }
 
 inline bool check_ret(const Ret& r, Ret::Code c)

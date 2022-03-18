@@ -42,11 +42,17 @@ void AppearancePreferencesModel::init()
 {
     uiConfiguration()->currentThemeChanged().onNotify(this, [this]() {
         emit themesChanged();
+        emit foregroundColorChanged();
     });
 
     uiConfiguration()->fontChanged().onNotify(this, [this]() {
         emit currentFontIndexChanged();
         emit bodyTextSizeChanged();
+    });
+
+    engravingConfiguration()->scoreInversionChanged().onNotify(this, [this]() {
+        emit invertScoreColorChanged();
+        emit foregroundColorChanged();
     });
 
     notationConfiguration()->backgroundChanged().onNotify(this, [this]() {
@@ -62,12 +68,32 @@ void AppearancePreferencesModel::init()
     });
 }
 
-QVariantList AppearancePreferencesModel::themes() const
+bool AppearancePreferencesModel::highContrastEnabled() const
+{
+    return uiConfiguration()->isHighContrast();
+}
+
+QVariantList AppearancePreferencesModel::generalThemes() const
 {
     QVariantList result;
 
     for (const ThemeInfo& theme: allThemes()) {
-        result << ThemeConverter::toMap(theme);
+        if (theme.codeKey == LIGHT_THEME_CODE || theme.codeKey == DARK_THEME_CODE) {
+            result << ThemeConverter::toMap(theme);
+        }
+    }
+
+    return result;
+}
+
+QVariantList AppearancePreferencesModel::highContrastThemes() const
+{
+    QVariantList result;
+
+    for (const ThemeInfo& theme : allThemes()) {
+        if (theme.codeKey == HIGH_CONTRAST_WHITE_THEME_CODE || theme.codeKey == HIGH_CONTRAST_BLACK_THEME_CODE) {
+            result << ThemeConverter::toMap(theme);
+        }
     }
 
     return result;
@@ -76,6 +102,33 @@ QVariantList AppearancePreferencesModel::themes() const
 QStringList AppearancePreferencesModel::accentColors() const
 {
     return uiConfiguration()->possibleAccentColors();
+}
+
+void AppearancePreferencesModel::resetThemeToDefault()
+{
+    uiConfiguration()->resetCurrentThemeToDefault(currentTheme().codeKey);
+    notationConfiguration()->resetCurrentBackgroundColorToDefault();
+    emit backgroundColorChanged();
+    emit themesChanged();
+}
+
+void AppearancePreferencesModel::setNewColor(const QColor& newColor, ColorType colorType)
+{
+    switch (colorType) {
+    case AccentColor:
+        uiConfiguration()->setCurrentThemeStyleValue(ThemeStyleKey::ACCENT_COLOR, Val(newColor));
+        break;
+    case TextAndIconsColor:
+        uiConfiguration()->setCurrentThemeStyleValue(ThemeStyleKey::FONT_PRIMARY_COLOR, Val(newColor));
+        break;
+    case DisabledColor:
+        return;
+    case BorderColor:
+        uiConfiguration()->setCurrentThemeStyleValue(ThemeStyleKey::STROKE_COLOR, Val(newColor));
+        break;
+    }
+
+    emit themesChanged();
 }
 
 QStringList AppearancePreferencesModel::allFonts() const
@@ -94,17 +147,19 @@ QString AppearancePreferencesModel::wallpapersDir() const
     return notationConfiguration()->wallpapersDefaultDirPath().toQString();
 }
 
-int AppearancePreferencesModel::currentThemeIndex() const
+void AppearancePreferencesModel::setHighContrastEnabled(bool enabled)
 {
-    ThemeList themes = allThemes();
-
-    for (int i = 0; i < static_cast<int>(themes.size()); ++i) {
-        if (themes[i].codeKey == currentTheme().codeKey) {
-            return i;
-        }
+    if (highContrastEnabled() == enabled) {
+        return;
     }
 
-    return INVALID_INDEX;
+    uiConfiguration()->setIsHighContrast(enabled);
+    emit highContrastEnabledChanged();
+}
+
+QString AppearancePreferencesModel::currentThemeCode() const
+{
+    return QString::fromStdString(currentTheme().codeKey);
 }
 
 int AppearancePreferencesModel::currentAccentColorIndex() const
@@ -172,19 +227,23 @@ QString AppearancePreferencesModel::foregroundWallpaperPath() const
     return notationConfiguration()->foregroundWallpaperPath().toQString();
 }
 
-void AppearancePreferencesModel::setCurrentThemeIndex(int index)
+bool AppearancePreferencesModel::scoreInversionEnabled() const
 {
-    ThemeList themes = allThemes();
+    return engravingConfiguration()->scoreInversionEnabled();
+}
 
-    if (index < 0 || index >= static_cast<int>(themes.size())) {
+void AppearancePreferencesModel::setCurrentThemeCode(const QString& themeCode)
+{
+    if (themeCode == currentThemeCode()) {
         return;
     }
 
-    if (index == currentThemeIndex()) {
-        return;
+    for (const ThemeInfo& theme : allThemes()) {
+        if (themeCode == QString::fromStdString(theme.codeKey)) {
+            uiConfiguration()->setCurrentTheme(theme.codeKey);
+            break;
+        }
     }
-
-    uiConfiguration()->setCurrentTheme(themes[index].codeKey);
     emit themesChanged();
 }
 
@@ -283,4 +342,14 @@ void AppearancePreferencesModel::setForegroundWallpaperPath(const QString& path)
 
     notationConfiguration()->setForegroundWallpaperPath(path);
     emit foregroundWallpaperPathChanged();
+}
+
+void AppearancePreferencesModel::setScoreInversionEnabled(bool value)
+{
+    if (value == scoreInversionEnabled()) {
+        return;
+    }
+
+    engravingConfiguration()->setScoreInversionEnabled(value);
+    emit invertScoreColorChanged();
 }

@@ -31,7 +31,7 @@
 #include "modularity/ioc.h"
 #include "context/iglobalcontext.h"
 #include "global/iinteractive.h"
-#include "instruments/iselectinstrumentscenario.h"
+#include "iselectinstrumentscenario.h"
 
 namespace mu::notation {
 class EditStaffType;
@@ -42,9 +42,7 @@ class EditStaff : public QDialog, private Ui::EditStaffBase
 
     INJECT(notation, context::IGlobalContext, globalContext)
     INJECT(notation, framework::IInteractive, interactive)
-    INJECT(notation, instruments::ISelectInstrumentsScenario, selectInstrumentsScenario)
-
-    Q_PROPERTY(int staffIdx READ staffIdx WRITE setStaffIdx NOTIFY staffIdxChanged)
+    INJECT(notation, ISelectInstrumentsScenario, selectInstrumentsScenario)
 
 public:
     EditStaff(QWidget* parent = nullptr);
@@ -53,7 +51,7 @@ public:
     static int metaTypeId();
 
 private:
-    virtual void hideEvent(QHideEvent*);
+    void hideEvent(QHideEvent*) override;
     void apply();
     void setStaff(Ms::Staff*, const Ms::Fraction& tick);
     void updateInterval(const Ms::Interval&);
@@ -79,35 +77,29 @@ private slots:
     void gotoPreviousStaff();
     void invisibleChanged();
     void transpositionChanged();
-    void setStaffIdx(int staffIdx);
 
 signals:
     void instrumentChanged();
-    void staffIdxChanged(int staffIdx);
 
 private:
+    INotationPtr notation() const;
     INotationPartsPtr notationParts() const;
 
-    int staffIdx() const;
-    void updateCurrentStaff();
+    void initStaff();
 
     Staff* staff(int staffIndex) const;
-    instruments::Instrument instrument() const;
+    Instrument instrument() const;
 
     void applyStaffProperties();
     void applyPartProperties();
 
-    bool isInstrumentChanged();
-
     QString midiCodeToStr(int midiCode);
 
-    int m_staffIdx = -1;
     Ms::Staff* m_staff = nullptr;
     Ms::Staff* m_orgStaff = nullptr;
-    ID m_partId;
-    ID m_instrumentId;
-    instruments::Instrument m_instrument;
-    instruments::Instrument m_orgInstrument;
+    Instrument m_instrument;
+    Instrument m_orgInstrument;
+    InstrumentKey m_instrumentKey;
     int m_minPitchA, m_maxPitchA, m_minPitchP, m_maxPitchP;
     Ms::Fraction m_tickStart, m_tickEnd;
 

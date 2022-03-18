@@ -25,6 +25,7 @@
 
 #include "async/channel.h"
 #include "retval.h"
+#include "mpe/events.h"
 
 #include "iaudiosource.h"
 #include "isequenceplayer.h"
@@ -39,13 +40,15 @@ public:
 
     virtual TrackSequenceId id() const = 0;
 
-    virtual RetVal<TrackId> addTrack(const std::string& trackName, const midi::MidiData& midiData,
-                                     const AudioOutputParams& outputParams) = 0;
-    virtual RetVal<TrackId> addTrack(const std::string& trackName, const io::path& filePath, const AudioOutputParams& outputParams) = 0;
+    virtual RetVal2<TrackId, AudioParams> addTrack(const std::string& trackName, const mpe::PlaybackData& playbackData,
+                                                   const AudioParams& requiredParams) = 0;
+    virtual RetVal2<TrackId, AudioParams> addTrack(const std::string& trackName, io::Device* device, const AudioParams& requiredParams) = 0;
 
+    virtual TrackName trackName(const TrackId id) const = 0;
     virtual TrackIdList trackIdList() const = 0;
 
     virtual Ret removeTrack(const TrackId id) = 0;
+    virtual void removeAllTracks() = 0;
 
     virtual async::Channel<TrackId> trackAdded() const = 0;
     virtual async::Channel<TrackId> trackRemoved() const = 0;

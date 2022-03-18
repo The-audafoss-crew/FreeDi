@@ -20,7 +20,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import QtQuick 2.15
-import QtQuick.Controls 2.2
+import QtQuick.Controls 2.15
 
 import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
@@ -28,21 +28,29 @@ import MuseScore.UiComponents 1.0
 TabButton {
     id: root
 
-    property int sideMargin: 0
-    property bool isCurrent: false
-    property string backgroundColor: ui.theme.backgroundPrimaryColor
+    property bool fillWidth: false
+
+    readonly property TabBar tabBar: TabBar.tabBar
+    property bool isCurrent: tabBar && (tabBar.currentItem === this)
 
     property alias navigation: navCtrl
 
     signal navigationTriggered()
 
-    width: implicitWidth + sideMargin * 2 - 8
-
-    onIsCurrentChanged: {
-        if (root.isCurrent) {
-            root.ensureActiveFocus()
+    onNavigationTriggered: {
+        if (tabBar) {
+            tabBar.currentIndex = TabBar.index
         }
     }
+
+    width: fillWidth && tabBar
+           ? (tabBar.width - (tabBar.count - 1) * tabBar.spacing) / tabBar.count
+           : implicitWidth
+
+    leftPadding: 0
+    rightPadding: 0
+
+    font: isCurrent ? ui.theme.largeBodyBoldFont : ui.theme.largeBodyFont
 
     onPressed: {
         root.ensureActiveFocus()
@@ -57,12 +65,13 @@ TabButton {
     NavigationControl {
         id: navCtrl
         name: root.objectName != "" ? root.objectName : "TabButton"
+        enabled: root.enabled && root.visible
 
         accessible.role: MUAccessible.RadioButton
         accessible.name: root.text
-        accessible.selected: root.isCurrent
+        accessible.checked: root.isCurrent
 
-        onActiveChanged: {
+        onActiveChanged: function(active) {
             if (active) {
                 root.ensureActiveFocus()
             }
@@ -73,27 +82,21 @@ TabButton {
     contentItem: StyledTextLabel {
         id: textLabel
         text: root.text
-        font: ui.theme.largeBodyFont
+        font: root.font
         opacity: 0.75
     }
 
-    background: Rectangle {
+    background: Item {
         implicitHeight: 32
 
-        color: root.backgroundColor
-
-        border.width: navCtrl.active ? 2 : 0
-        border.color: ui.theme.focusColor
+        NavigationFocusBorder { navigationCtrl: navCtrl }
 
         Rectangle {
-            id: selectedRect
+            id: selectedUnderline
 
             anchors.left: parent.left
-            anchors.leftMargin: sideMargin
             anchors.right: parent.right
-            anchors.rightMargin: sideMargin
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 4
 
             height: 2
 
@@ -105,7 +108,7 @@ TabButton {
     states: [
         State {
             name: "HOVERED"
-            when: root.hovered && !isCurrent
+            when: root.hovered && !root.isCurrent
 
             PropertyChanges {
                 target: contentItem
@@ -115,12 +118,11 @@ TabButton {
 
         State {
             name: "SELECTED"
-            when: isCurrent
+            when: root.isCurrent
 
             PropertyChanges {
                 target: textLabel
                 opacity: 1
-                font: ui.theme.largeBodyBoldFont
             }
         }
     ]

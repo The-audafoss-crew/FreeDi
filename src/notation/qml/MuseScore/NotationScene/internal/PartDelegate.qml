@@ -19,8 +19,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import QtQuick 2.9
-import QtQuick.Controls 2.12
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
 
 import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
@@ -29,18 +30,20 @@ ListItemBlank {
     id: root
 
     property string title: ""
-    property int maxTitleWidth: 0
-    property bool isMain: false
     property int currentPartIndex: -1
-    property alias voicesVisibility: voicesPopup.voicesVisibility
-    property alias voicesTitle: voicesLabel.text
 
-    property int sidePadding: 0
+    property bool isCreated: false
+
+    property int sideMargin: 0
+
+    navigation.column: 0
+    navigation.accessible.name: title
 
     signal copyPartRequested()
     signal removePartRequested()
-    signal voicesVisibilityChangeRequested(var voiceIndex, var voiceVisible)
     signal partClicked()
+    signal titleEdited(string newTitle)
+    signal titleEditingFinished()
 
     function startEditTitle() {
         if (titleLoader.sourceComponent !== editPartTitleField) {
@@ -51,13 +54,19 @@ ListItemBlank {
     function endEditTitle() {
         if (titleLoader.sourceComponent !== partTitle) {
             titleLoader.sourceComponent = partTitle
+            titleEditingFinished()
+            root.navigation.requestActive()
         }
+    }
+
+    onCurrentPartIndexChanged: {
+        root.endEditTitle()
     }
 
     height: 42
 
     onClicked: {
-        voicesPopup.close()
+        endEditTitle()
         root.partClicked()
     }
 
@@ -65,160 +74,98 @@ ListItemBlank {
         root.startEditTitle()
     }
 
-    StyledIconLabel {
-        id: partIcon
-
-        anchors.left: parent.left
-        anchors.leftMargin: root.sidePadding
-
-        height: parent.height
-        width: height
-
-        iconCode: root.isMain ? IconCode.PAGE : IconCode.NEW_FILE
-    }
-
-    Component {
-        id: partTitle
-
-        StyledTextLabel {
-            text: root.title
-
-            horizontalAlignment: Qt.AlignLeft
-            font: ui.theme.bodyBoldFont
+    onIsSelectedChanged: {
+        if (isSelected && !navigation.active) {
+            navigation.requestActive()
         }
     }
 
-    Component {
-        id: editPartTitleField
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: root.sideMargin - partIcon.width/3
+        anchors.rightMargin: root.sideMargin
 
-        TextInputField {
-            Component.onCompleted: {
-                forceActiveFocus()
+        spacing: 4
+
+        StyledIconLabel {
+            id: partIcon
+
+            iconCode: IconCode.NEW_FILE
+        }
+
+        Loader {
+            id: titleLoader
+
+            Layout.fillWidth: true
+
+            sourceComponent: partTitle
+
+            Component {
+                id: partTitle
+
+                StyledTextLabel {
+                    text: root.title
+
+                    horizontalAlignment: Qt.AlignLeft
+                    font: ui.theme.bodyBoldFont
+                }
             }
 
-            currentText: root.title
+            Component {
+                id: editPartTitleField
 
-            onCurrentTextEdited: {
-                root.title = newTextValue
-            }
-        }
-    }
+                TextInputField {
+                    navigation.panel: root.navigation.panel
+                    navigation.row: root.navigation.row
+                    navigation.column: 1
 
-    Loader {
-        id: titleLoader
+                    Component.onCompleted: {
+                        forceActiveFocus()
+                        navigation.requestActive()
+                    }
 
-        anchors.left: partIcon.right
-        anchors.verticalCenter: parent.verticalCenter
+                    currentText: root.title
 
-        width: root.maxTitleWidth - partIcon.width
+                    onCurrentTextEdited: function(newTextValue) {
+                        root.titleEdited(newTextValue)
+                    }
 
-        sourceComponent: partTitle
-
-        Connections {
-            target: root
-
-            function onCurrentPartIndexChanged(currentPartIndex) {
-                root.endEditTitle()
-            }
-        } 
-    }
-
-    FlatButton {
-        id: showVoicesPopupButton
-
-        anchors.left: titleLoader.right
-        anchors.verticalCenter: parent.verticalCenter
-
-        normalStateColor: "transparent"
-        icon: IconCode.SMALL_ARROW_DOWN
-
-        onClicked: {
-            if (voicesPopup.opened) {
-                voicesPopup.close()
-                return
-            }
-
-            voicesPopup.open()
-        }
-    }
-
-    StyledTextLabel {
-        id: voicesLabel
-
-        anchors.left: showVoicesPopupButton.right
-        anchors.leftMargin: 8
-        height: parent.height
-
-        horizontalAlignment: Qt.AlignLeft
-    }
-
-    FlatButton {
-        anchors.right: parent.right
-        anchors.rightMargin: root.sidePadding
-        anchors.verticalCenter: parent.verticalCenter
-
-        normalStateColor: "transparent"
-        icon: IconCode.MENU_THREE_DOTS
-
-        onClicked: {
-            contextMenu.popup()
-        }
-    }
-
-    VoicesPopup {
-        id: voicesPopup
-
-        x: showVoicesPopupButton.x + showVoicesPopupButton.width / 2 - width / 2
-        y: showVoicesPopupButton.y + showVoicesPopupButton.height
-
-        onVoiceVisibilityChangeRequested: {
-            root.voicesVisibilityChangeRequested(voiceIndex, voiceVisible)
-        }
-    }
-
-    ContextMenu {
-        id: contextMenu
-
-        StyledContextMenuItem {
-            id: duplicateItem
-
-            text: qsTrc("notation", "Duplicate")
-
-            onTriggered: {
-                root.copyPartRequested()
+                    onTextEditingFinished: {
+                        Qt.callLater(root.endEditTitle)
+                    }
+                }
             }
         }
 
-        StyledContextMenuItem {
-            id: deleteItem
+        MenuButton {
+            menuModel: [
+                { "id": "duplicate", "title": qsTrc("notation", "Duplicate"), "enabled": root.isCreated },
+                { "id": "delete", "title": qsTrc("notation", "Delete"), "enabled": root.isCreated },
+                { "id": "rename", "title": qsTrc("notation", "Rename") },
+            ]
 
-            text: qsTrc("notation", "Delete")
+            navigation.name: title
+            navigation.panel: root.navigation.panel
+            navigation.row: root.navigation.row
+            navigation.column: 2
 
-            onTriggered: {
-                root.removePartRequested()
-            }
-        }
-
-        StyledContextMenuItem {
-            id: renameItem
-
-            text: qsTrc("notation", "Rename")
-
-            onTriggered: {
-                root.startEditTitle()
-            }
-        }
-
-        Component.onCompleted: {
-            if (root.isMain) {
-                removeItem(deleteItem)
+            onHandleMenuItem: function(itemId) {
+                switch(itemId) {
+                case "duplicate":
+                    root.copyPartRequested()
+                    break
+                case "delete":
+                    root.removePartRequested()
+                    break
+                case "rename":
+                    root.startEditTitle()
+                    break;
+                }
             }
         }
     }
 
     SeparatorLine {
-        anchors.leftMargin: -root.anchors.leftMargin
-        anchors.rightMargin: -root.anchors.rightMargin
         anchors.bottom: parent.bottom
     }
 }

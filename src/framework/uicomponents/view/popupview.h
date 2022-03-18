@@ -34,6 +34,8 @@
 #include "ui/view/navigationcontrol.h"
 #include "popupwindow/ipopupwindow.h"
 
+class QQuickCloseEvent;
+
 namespace mu::uicomponents {
 class PopupView : public QObject, public QQmlParserStatus
 {
@@ -42,6 +44,10 @@ class PopupView : public QObject, public QQmlParserStatus
 
     Q_PROPERTY(QQuickItem * parent READ parentItem WRITE setParentItem NOTIFY parentItemChanged)
     Q_PROPERTY(QQuickItem * contentItem READ contentItem WRITE setContentItem NOTIFY contentItemChanged)
+    Q_PROPERTY(int contentWidth READ contentWidth WRITE setContentWidth NOTIFY contentWidthChanged)
+    Q_PROPERTY(int contentHeight READ contentHeight WRITE setContentHeight NOTIFY contentHeightChanged)
+
+    Q_PROPERTY(QWindow * window READ window NOTIFY windowChanged)
 
     //! NOTE Local, related parent
     Q_PROPERTY(qreal x READ localX WRITE setLocalX NOTIFY xChanged)
@@ -69,7 +75,7 @@ class PopupView : public QObject, public QQmlParserStatus
 
     //! NOTE Used for dialogs, but be here so that dialogs and just popups have one api
     Q_PROPERTY(QString title READ title WRITE setTitle NOTIFY titleChanged)
-    Q_PROPERTY(QString objectID READ objectID WRITE setObjectID NOTIFY objectIDChanged)
+    Q_PROPERTY(QString objectId READ objectId WRITE setObjectId NOTIFY objectIdChanged)
     Q_PROPERTY(bool modal READ modal WRITE setModal NOTIFY modalChanged)
     Q_PROPERTY(bool resizable READ resizable WRITE setResizable NOTIFY resizableChanged)
     Q_PROPERTY(QVariantMap ret READ ret WRITE setRet NOTIFY retChanged)
@@ -87,12 +93,13 @@ public:
 
     enum ClosePolicy {
         NoAutoClose = 0,
-        CloseOnPressOutsideParent,
-        CloseOnReleaseOutsideParent
+        CloseOnPressOutsideParent
     };
 
     QQuickItem* parentItem() const;
     QQuickItem* contentItem() const;
+
+    QWindow* window() const;
 
     qreal localX() const;
     qreal localY() const;
@@ -104,12 +111,14 @@ public:
     Q_INVOKABLE void close();
     Q_INVOKABLE void toggleOpened();
 
+    Q_INVOKABLE void setParentWindow(QWindow* window);
+
     ClosePolicy closePolicy() const;
     QObject* navigationParentControl() const;
 
     bool isOpened() const;
 
-    QString objectID() const;
+    QString objectId() const;
     QString title() const;
     bool modal() const;
     bool resizable() const;
@@ -122,6 +131,12 @@ public:
     bool showArrow() const;
     QQuickItem* anchorItem() const;
 
+    int contentWidth() const;
+    void setContentWidth(int newContentWidth);
+
+    int contentHeight() const;
+    void setContentHeight(int newContentHeight);
+
 public slots:
     void setParentItem(QQuickItem* parent);
     void setContentItem(QQuickItem* content);
@@ -129,7 +144,7 @@ public slots:
     void setLocalY(qreal y);
     void setClosePolicy(ClosePolicy closePolicy);
     void setNavigationParentControl(QObject* parentNavigationControl);
-    void setObjectID(QString objectID);
+    void setObjectId(QString objectId);
     void setTitle(QString title);
     void setModal(bool modal);
     void setResizable(bool resizable);
@@ -145,11 +160,12 @@ public slots:
 signals:
     void parentItemChanged();
     void contentItemChanged();
+    void windowChanged();
     void xChanged(qreal x);
     void yChanged(qreal y);
     void closePolicyChanged(ClosePolicy closePolicy);
     void navigationParentControlChanged(QObject* navigationParentControl);
-    void objectIDChanged(QString objectID);
+    void objectIdChanged(QString objectId);
     void titleChanged(QString title);
     void modalChanged(bool modal);
     void resizableChanged(bool resizable);
@@ -157,6 +173,7 @@ signals:
 
     void isOpenedChanged();
     void opened();
+    void aboutToClose(QQuickCloseEvent* closeEvent);
     void closed();
 
     void opensUpwardChanged(bool opensUpward);
@@ -166,6 +183,9 @@ signals:
     void showArrowChanged(bool showArrow);
     void anchorItemChanged(QQuickItem* anchorItem);
 
+    void contentWidthChanged();
+    void contentHeightChanged();
+
 private slots:
     void onApplicationStateChanged(Qt::ApplicationState state);
 
@@ -174,8 +194,8 @@ protected:
     void classBegin() override;
     void componentComplete() override;
     bool eventFilter(QObject* watched, QEvent* event) override;
-    void mousePressEvent(QMouseEvent* event);
-    void mouseReleaseEvent(QMouseEvent* event);
+
+    void doFocusOut();
 
     bool isMouseWithinBoundaries(const QPoint& mousePos) const;
 
@@ -183,18 +203,24 @@ protected:
     virtual void beforeShow();
     virtual void onHidden();
 
+    void repositionWindowIfNeed();
+
     void setErrCode(Ret::Code code);
 
     QRect currentScreenGeometry() const;
     void updatePosition();
+    void updateContentPosition();
 
     QQuickItem* parentPopupContentItem() const;
     Qt::AlignmentFlag parentCascadeAlign(const QQuickItem* parent) const;
 
-    QRect anchorGeometry() const;
+    QRectF anchorGeometry() const;
 
     IPopupWindow* m_window = nullptr;
+
     QQuickItem* m_contentItem = nullptr;
+    int m_contentWidth = 0;
+    int m_contentHeight = 0;
 
     QQuickItem* m_anchorItem = nullptr;
 
@@ -202,7 +228,7 @@ protected:
     QPointF m_globalPos;
     ClosePolicy m_closePolicy = ClosePolicy::CloseOnPressOutsideParent;
     QObject* m_navigationParentControl = nullptr;
-    QString m_objectID;
+    QString m_objectId;
     QString m_title;
     bool m_modal = true;
     bool m_resizable = false;

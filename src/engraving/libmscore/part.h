@@ -26,6 +26,11 @@
 #include "mscore.h"
 #include "instrument.h"
 #include "text.h"
+#include "types/types.h"
+
+namespace mu::engraving::compat {
+class Read206;
+}
 
 namespace Ms {
 class XmlWriter;
@@ -61,40 +66,47 @@ enum class PreferSharpFlat : char {
 //   @P volume          int
 //---------------------------------------------------------
 
-class Part final : public ScoreElement
+class Part final : public EngravingObject
 {
     QString _partName;              ///< used in tracklist (mixer)
     InstrumentList _instruments;
     QList<Staff*> _staves;
-    QString _id;                    ///< used for MusicXml import
-    bool _show;                     ///< show part in partitur if true
-    bool _soloist;                  ///< used in score ordering
+    ID _id = INVALID_ID;             ///< used for MusicXml import
+    bool _show = false;              ///< show part in partitur if true
+    bool _soloist = false;           ///< used in score ordering
 
     static const int DEFAULT_COLOR = 0x3399ff;
-    int _color;                     ///User specified color for helping to label parts
+    int _color = 0;                  ///User specified color for helping to label parts
 
-    PreferSharpFlat _preferSharpFlat;
+    PreferSharpFlat _preferSharpFlat = PreferSharpFlat::DEFAULT;
+
+    friend class mu::engraving::compat::Read206;
 
 public:
-    Part(Score* = 0);
+    Part(Score* score = nullptr);
     void initFromInstrTemplate(const InstrumentTemplate*);
 
-    ElementType type() const override { return ElementType::PART; }
+    ID id() const;
+    void setId(const ID& id);
+
+    Part* clone() const;
 
     void read(XmlReader&);
     bool readProperties(XmlReader&);
     void write(XmlWriter& xml) const;
 
-    int nstaves() const { return _staves.size(); }
-    QList<Staff*>* staves() { return &_staves; }
-    const QList<Staff*>* staves() const { return &_staves; }
+    int nstaves() const;
+    const QList<Staff*>* staves() const;
+    void appendStaff(Staff* staff);
+    void clearStaves();
+
     Staff* staff(int idx) const;
-    void setId(const QString& s) { _id = s; }
-    QString id() const { return _id; }
     QString familyId() const;
 
     int startTrack() const;
     int endTrack() const;
+
+    InstrumentTrackIdSet instrumentTrackIdSet() const;
 
     QString longName(const Fraction& tick = { -1, 1 }) const;
     QString shortName(const Fraction& tick = { -1, 1 }) const;
@@ -132,14 +144,13 @@ public:
     Instrument* instrument(Fraction = { -1, 1 });
     const Instrument* instrument(Fraction = { -1, 1 }) const;
     void setInstrument(Instrument*, Fraction = { -1, 1 });         // transfer ownership
+    void setInstrument(Instrument*, int tick);
     void setInstrument(const Instrument&&, Fraction = { -1, 1 });
     void setInstrument(const Instrument&, Fraction = { -1, 1 });
     void setInstruments(const InstrumentList& instruments);
     void removeInstrument(const Fraction&);
     void removeInstrument(const QString&);
     const InstrumentList* instruments() const;
-
-    bool isDoublingInstrument(const QString& instrumentId) const;
 
     void insertTime(const Fraction& tick, const Fraction& len);
 
@@ -148,8 +159,10 @@ public:
     int color() const { return _color; }
     void setColor(int value) { _color = value; }
 
-    QVariant getProperty(Pid) const override;
-    bool setProperty(Pid, const QVariant&) override;
+    bool isVisible() const;
+
+    mu::engraving::PropertyValue getProperty(Pid) const override;
+    bool setProperty(Pid, const mu::engraving::PropertyValue&) override;
 
     int lyricCount() const;
     int harmonyCount() const;

@@ -31,11 +31,15 @@ using paths = std::vector<path>;
 struct path {
     path() = default;
     path(const path&) = default;
+    path(const QByteArray& s);
     path(const QString& s);
     path(const std::string& s);
     path(const char* s);
 
     bool empty() const;
+
+    path appendingComponent(const path& other) const;
+    path appendingSuffix(const path& suffix) const;
 
     inline path& operator=(const QString& other) { m_path = other.toUtf8(); return *this; }
 
@@ -49,6 +53,8 @@ struct path {
     inline path& operator+=(const path& other) { m_path += other.m_path; return *this; }
     inline path& operator+=(const QString& other) { m_path += other.toUtf8(); return *this; }
     inline path& operator+=(const char* other) { m_path += other; return *this; }
+
+    inline bool operator<(const path& other) const { return m_path < other.m_path; }
 
     QString toQString() const;
     std::string toStdString() const;
@@ -70,12 +76,15 @@ inline mu::logger::Stream& operator<<(mu::logger::Stream& s, const mu::io::path&
     return s;
 }
 
-std::string syffix(const path& path);
-path filename(const path& path);
+std::string suffix(const path& path);
+path filename(const path& path, bool includingExtension = true);
 path basename(const path& path);
-path completebasename(const path& path);
+path absolutePath(const path& path);
 path dirname(const path& path);
 path dirpath(const path& path);
+path absoluteDirpath(const path& path);
+
+bool isAbsolute(const path& path);
 
 bool isAllowedFileName(const path& fn);
 path escapeFileName(const path& fn);

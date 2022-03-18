@@ -48,6 +48,11 @@ public:
     QStringList possibleFontFamilies() const override;
     QStringList possibleAccentColors() const override;
 
+    bool isHighContrast() const override;
+    void setIsHighContrast(bool highContrast) override;
+
+    void resetCurrentThemeToDefault(const ThemeCode& codeKey) override;
+
     const ThemeInfo& currentTheme() const override;
     void setCurrentTheme(const ThemeCode& codeKey) override;
     void setCurrentThemeStyleValue(ThemeStyleKey key, const Val& val) override;
@@ -67,12 +72,15 @@ public:
     int musicalFontSize() const override;
     async::Notification musicalFontChanged() const override;
 
-    float guiScaling() const override;
-    float physicalDotsPerInch() const override;
+    std::string defaultFontFamily() const override;
+    int defaultFontSize() const override;
 
-    void setPhysicalDotsPerInch(std::optional<float> dpi) override;
+    double guiScaling() const override;
+    double dpi() const override;
 
-    QByteArray pageState(const QString& pageName) const override;
+    void setPhysicalDotsPerInch(std::optional<double> dpi) override;
+
+    ValNt<QByteArray> pageState(const QString& pageName) const override;
     void setPageState(const QString& pageName, const QByteArray& state) override;
 
     QByteArray windowGeometry() const override;
@@ -88,6 +96,8 @@ public:
     ToolConfig toolConfig(const QString& toolName) const override;
     void setToolConfig(const QString& toolName, const ToolConfig& config) override;
     async::Notification toolConfigChanged(const QString& toolName) const override;
+
+    int flickableMaxVelocity() const override;
 
 private:
     bool needFollowSystemTheme() const;
@@ -113,7 +123,7 @@ private:
 
     ThemeList m_themes;
     size_t m_currentThemeIndex = 0;
-    std::optional<float> m_customDPI;
+    std::optional<double> m_customDPI;
 };
 }
 

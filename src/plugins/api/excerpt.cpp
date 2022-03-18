@@ -22,7 +22,7 @@
 
 #include "excerpt.h"
 #include "score.h"
-#include "libmscore/score.h"
+#include "libmscore/masterscore.h"
 
 namespace Ms {
 namespace PluginAPI {
@@ -32,7 +32,7 @@ namespace PluginAPI {
 
 Score* Excerpt::partScore()
 {
-    return wrap<Score>(e->partScore(), Ownership::SCORE);
+    return wrap<Score>(e->excerptScore(), Ownership::SCORE);
 }
 
 //---------------------------------------------------------

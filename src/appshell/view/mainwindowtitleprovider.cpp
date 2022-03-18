@@ -34,12 +34,15 @@ void MainWindowTitleProvider::load()
 {
     update();
 
-    context()->currentMasterNotationChanged().onNotify(this, [this]() {
+    context()->currentProjectChanged().onNotify(this, [this]() {
         update();
 
-        IMasterNotationPtr masterNotation = context()->currentMasterNotation();
-        if (masterNotation) {
-            masterNotation->needSave().notification.onNotify(this, [this]() {
+        if (auto currentProject = context()->currentProject()) {
+            currentProject->pathChanged().onNotify(this, [this]() {
+                update();
+            });
+
+            currentProject->needSave().notification.onNotify(this, [this]() {
                 update();
             });
         }
@@ -61,7 +64,7 @@ bool MainWindowTitleProvider::fileModified() const
     return m_fileModified;
 }
 
-void MainWindowTitleProvider::setTitle(QString title)
+void MainWindowTitleProvider::setTitle(const QString& title)
 {
     if (title == m_title) {
         return;
@@ -71,7 +74,7 @@ void MainWindowTitleProvider::setTitle(QString title)
     emit titleChanged(title);
 }
 
-void MainWindowTitleProvider::setFilePath(QString filePath)
+void MainWindowTitleProvider::setFilePath(const QString& filePath)
 {
     if (filePath == m_filePath) {
         return;
@@ -93,16 +96,19 @@ void MainWindowTitleProvider::setFileModified(bool fileModified)
 
 void MainWindowTitleProvider::update()
 {
-    IMasterNotationPtr masterNotation = context()->currentMasterNotation();
+    project::INotationProjectPtr project = context()->currentProject();
 
-    if (!masterNotation) {
+    if (!project) {
         setTitle(qtrc("appshell", "MuseScore 4"));
         setFilePath("");
         setFileModified(false);
         return;
     }
 
-    setTitle(masterNotation->metaInfo().title);
-    setFilePath(masterNotation->created().val ? "" : masterNotation->metaInfo().filePath.toQString());
-    setFileModified(masterNotation->needSave().val);
+    INotationPtr notation = context()->currentNotation();
+    setTitle(notation->projectNameAndPartName());
+
+    setFilePath((project->isNewlyCreated() || project->isCloudProject())
+                ? "" : project->path().toQString());
+    setFileModified(project->needSave().val);
 }

@@ -26,7 +26,7 @@
 
 #include "modularity/ioc.h"
 #include "iappshellconfiguration.h"
-#include "userscores/iuserscoresconfiguration.h"
+#include "project/iprojectconfiguration.h"
 
 namespace mu::appshell {
 class ProgrammeStartPreferencesModel : public QObject
@@ -58,8 +58,7 @@ private:
     enum PanelType {
         Unknown,
         SplashScreen,
-        Navigator,
-        Tours
+        Navigator
     };
 
     struct Panel
@@ -73,7 +72,7 @@ private:
 
     struct StartMode
     {
-        StartupSessionType sessionType = StartupSessionType::StartWithNewScore;
+        StartupModeType type = StartupModeType::StartWithNewScore;
         QString title;
         bool checked = false;
         bool canSelectScorePath = false;

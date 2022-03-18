@@ -26,21 +26,15 @@ set(MODULE_QML_IMPORT ${CMAKE_CURRENT_LIST_DIR}/qml)
 find_package(Qt5 COMPONENTS Svg REQUIRED)
 
 include(${CMAKE_CURRENT_LIST_DIR}/view/widgets/widgets.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/view/styledialog/styledialog.cmake)
 
 set(MODULE_SRC
-    ${WIDGETS_SRC}
     ${CMAKE_CURRENT_LIST_DIR}/notationmodule.cpp
     ${CMAKE_CURRENT_LIST_DIR}/notationmodule.h
     ${CMAKE_CURRENT_LIST_DIR}/imasternotation.h
     ${CMAKE_CURRENT_LIST_DIR}/iexcerptnotation.h
     ${CMAKE_CURRENT_LIST_DIR}/inotation.h
-    ${CMAKE_CURRENT_LIST_DIR}/inotationreader.h
-    ${CMAKE_CURRENT_LIST_DIR}/inotationreadersregister.h
-    ${CMAKE_CURRENT_LIST_DIR}/inotationwriter.h
-    ${CMAKE_CURRENT_LIST_DIR}/inotationwritersregister.h
-    ${CMAKE_CURRENT_LIST_DIR}/abstractnotationwriter.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/abstractnotationwriter.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/inotationcreator.h
+    ${CMAKE_CURRENT_LIST_DIR}/inotationpainting.h
     ${CMAKE_CURRENT_LIST_DIR}/inotationnoteinput.h
     ${CMAKE_CURRENT_LIST_DIR}/inotationselection.h
     ${CMAKE_CURRENT_LIST_DIR}/inotationinteraction.h
@@ -54,6 +48,9 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/inotationplayback.h
     ${CMAKE_CURRENT_LIST_DIR}/inotationelements.h
     ${CMAKE_CURRENT_LIST_DIR}/inotationparts.h
+    ${CMAKE_CURRENT_LIST_DIR}/iinstrumentsrepository.h
+    ${CMAKE_CURRENT_LIST_DIR}/iselectinstrumentscenario.h
+
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationuiactions.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationuiactions.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/igetscore.h
@@ -63,12 +60,12 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/internal/excerptnotation.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/notation.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/notation.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/notationpainting.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/notationpainting.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationundostack.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationundostack.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationstyle.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationstyle.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/notationcreator.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/notationcreator.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/scorecallbacks.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/scorecallbacks.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationnoteinput.cpp
@@ -86,16 +83,10 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationaccessibility.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationconfiguration.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationconfiguration.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/mscznotationreader.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/mscznotationreader.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/positionswriter.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/positionswriter.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/notationreadersregister.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/notationreadersregister.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/notationwritersregister.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/notationwritersregister.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/msczmetareader.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/msczmetareader.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/mscnotationwriter.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/mscnotationwriter.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationplayback.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/notationplayback.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/midiinputcontroller.cpp
@@ -109,14 +100,9 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/internal/searchcommandsparser.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/searchcommandsparser.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/inotationselectionrange.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/instrumentsconverter.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/instrumentsconverter.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/scoreorderconverter.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/scoreorderconverter.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/inotationmidievents.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/notationmidievents.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/notationmidievents.h
-    ${CMAKE_CURRENT_LIST_DIR}/view/inotationcontextmenu.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/instrumentsrepository.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/instrumentsrepository.h
+
     ${CMAKE_CURRENT_LIST_DIR}/view/notationpaintview.cpp
     ${CMAKE_CURRENT_LIST_DIR}/view/notationpaintview.h
     ${CMAKE_CURRENT_LIST_DIR}/view/notationviewinputcontroller.cpp
@@ -139,14 +125,23 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/view/noteinputbarcustomisemodel.h
     ${CMAKE_CURRENT_LIST_DIR}/view/notationtoolbarmodel.cpp
     ${CMAKE_CURRENT_LIST_DIR}/view/notationtoolbarmodel.h
-    ${CMAKE_CURRENT_LIST_DIR}/view/notationcontextmenu.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/view/notationcontextmenu.h
+    ${CMAKE_CURRENT_LIST_DIR}/view/notationcontextmenumodel.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/view/notationcontextmenumodel.h
     ${CMAKE_CURRENT_LIST_DIR}/view/notationnavigator.cpp
     ${CMAKE_CURRENT_LIST_DIR}/view/notationnavigator.h
     ${CMAKE_CURRENT_LIST_DIR}/view/noteinputbarcustomiseitem.cpp
     ${CMAKE_CURRENT_LIST_DIR}/view/noteinputbarcustomiseitem.h
     ${CMAKE_CURRENT_LIST_DIR}/view/internal/undoredomodel.cpp
     ${CMAKE_CURRENT_LIST_DIR}/view/internal/undoredomodel.h
+    ${CMAKE_CURRENT_LIST_DIR}/view/internal/noteflagstypeselectormodel.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/view/internal/noteflagstypeselectormodel.h
+    ${CMAKE_CURRENT_LIST_DIR}/view/selectionfiltermodel.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/view/selectionfiltermodel.h
+    ${CMAKE_CURRENT_LIST_DIR}/view/editgridsizedialogmodel.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/view/editgridsizedialogmodel.h
+
+    ${WIDGETS_SRC}
+    ${STYLEDIALOG_SRC}
     )
 
 set(MODULE_UI

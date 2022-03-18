@@ -60,6 +60,7 @@ public:
         Apply,
         Reset,
         RestoreDefaults,
+        Continue,
 
         CustomButton
     };
@@ -69,10 +70,15 @@ public:
         int btn = int(Button::CustomButton);
         std::string text;
         bool accent = false;
+
         ButtonData(int btn, const std::string& text)
             : btn(btn), text(text) {}
+        ButtonData(Button btn, const std::string& text)
+            : btn(int(btn)), text(text) {}
         ButtonData(int btn, const std::string& text, bool accent)
             : btn(btn), text(text), accent(accent) {}
+        ButtonData(Button btn, const std::string& text, bool accent)
+            : btn(int(btn)), text(text), accent(accent) {}
     };
     using ButtonDatas = std::vector<ButtonData>;
 
@@ -99,7 +105,7 @@ public:
         Result(const int& button, bool showAgain)
             : m_button(button), m_showAgain(showAgain) {}
 
-        Button standartButton() const { return static_cast<Button>(m_button); }
+        Button standardButton() const { return static_cast<Button>(m_button); }
         int button() const { return m_button; }
 
         bool showAgain() const { return m_showAgain; }
@@ -151,16 +157,27 @@ public:
 
     // custom
     virtual RetVal<Val> open(const std::string& uri) const = 0;
+    virtual RetVal<Val> open(const Uri& uri) const = 0;
     virtual RetVal<Val> open(const UriQuery& uri) const = 0;
     virtual RetVal<bool> isOpened(const std::string& uri) const = 0;
     virtual RetVal<bool> isOpened(const Uri& uri) const = 0;
+    virtual RetVal<bool> isOpened(const UriQuery& uri) const = 0;
+    virtual async::Channel<Uri> opened() const = 0;
+
+    virtual void raise(const UriQuery& uri) = 0;
 
     virtual void close(const std::string& uri) = 0;
     virtual void close(const Uri& uri) = 0;
 
     virtual ValCh<Uri> currentUri() const = 0;
+    virtual std::vector<Uri> stack() const = 0;
 
     virtual Ret openUrl(const std::string& url) const = 0;
+    virtual Ret openUrl(const QUrl& url) const = 0;
+
+    /// Opens a file browser at the parent directory of filePath,
+    /// and selects the file at filePath on OSs that support it
+    virtual Ret revealInFileBrowser(const io::path& filePath) const = 0;
 };
 Q_DECLARE_OPERATORS_FOR_FLAGS(IInteractive::Options)
 }

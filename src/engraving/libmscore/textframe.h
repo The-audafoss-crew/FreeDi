@@ -38,29 +38,34 @@ class TBox : public VBox
     Text* _text;
 
 public:
-    TBox(Score* score);
+    TBox(System* parent);
     TBox(const TBox&);
     ~TBox();
 
+    Text* text() const { return _text; }
+
     // Score Tree functions
-    ScoreElement* treeParent() const override;
-    ScoreElement* treeChild(int idx) const override;
-    int treeChildCount() const override;
+    EngravingObject* scanParent() const override;
+    EngravingObject* scanChild(int idx) const override;
+    int scanChildCount() const override;
 
-    virtual TBox* clone() const override { return new TBox(*this); }
-    virtual ElementType type() const override { return ElementType::TBOX; }
-    virtual void write(XmlWriter&) const override;
+    TBox* clone() const override { return new TBox(*this); }
+
+    void write(XmlWriter&) const override;
     using VBox::write;
-    virtual void read(XmlReader&) override;
-    virtual Element* drop(EditData&) override;
-    virtual void add(Element* e) override;
-    virtual void remove(Element* el) override;
+    void read(XmlReader&) override;
+    EngravingItem* drop(EditData&) override;
+    void add(EngravingItem* e) override;
+    void remove(EngravingItem* el) override;
 
-    virtual void layout() override;
-    virtual QString accessibleExtraInfo() const override;
-    Text* text() { return _text; }
+    void layout() override;
+    QString accessibleExtraInfo() const override;
 
-    EditBehavior normalModeEditBehavior() const override { return EditBehavior::SelectOnly; }
+    int gripsCount() const override;
+    Grip initialEditModeGrip() const override;
+    Grip defaultGrip() const override;
+
+    bool needStartEditingAfterSelecting() const override { return false; }
 };
 }     // namespace Ms
 #endif

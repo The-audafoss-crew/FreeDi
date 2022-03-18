@@ -23,10 +23,12 @@
 #define MU_NOTATION_EDITSTYLE_H
 
 #include "ui_editstyle.h"
+
 #include "modularity/ioc.h"
 #include "context/iglobalcontext.h"
 #include "inotationconfiguration.h"
 #include "iinteractive.h"
+#include "ui/iuiengine.h"
 
 namespace mu::notation {
 class EditStyle : public QDialog, private Ui::EditStyleBase
@@ -36,18 +38,28 @@ class EditStyle : public QDialog, private Ui::EditStyleBase
     INJECT(notation, mu::context::IGlobalContext, globalContext)
     INJECT(notation, mu::notation::INotationConfiguration, configuration)
     INJECT(notation, mu::framework::IInteractive, interactive)
+    INJECT(notation, mu::ui::IUiEngine, uiEngine)
+
+    Q_PROPERTY(QString currentPageCode READ currentPageCode WRITE setCurrentPageCode NOTIFY currentPageChanged)
+    Q_PROPERTY(QString currentSubPageCode READ currentSubPageCode WRITE setCurrentSubPageCode NOTIFY currentSubPageChanged)
 
 public:
     EditStyle(QWidget* = nullptr);
     EditStyle(const EditStyle&);
 
-    void setPage(int idx);
-    void gotoElement(Element* e);
-    static bool elementHasPage(Element* e);
+    QString currentPageCode() const;
+    QString currentSubPageCode() const;
 
 public slots:
     void accept();
     void reject();
+
+    void setCurrentPageCode(const QString& code);
+    void setCurrentSubPageCode(const QString& code);
+
+signals:
+    void currentPageChanged();
+    void currentSubPageChanged();
 
 private:
     void showEvent(QShowEvent*);
@@ -62,13 +74,13 @@ private:
     /// This is a type for a pointer to any QWidget that is a member of EditStyle.
     /// It's used to create static references to the pointers to pages.
     typedef QWidget* EditStyle::* EditStylePage;
-    static EditStylePage pageForElement(Element*);
+    static EditStylePage pageForElement(EngravingItem*);
 
     struct StyleWidget {
-        StyleId idx;
-        bool showPercent;
-        QObject* widget;
-        QToolButton* reset;
+        StyleId idx = StyleId::NOSTYLE;
+        bool showPercent = false;
+        QObject* widget = nullptr;
+        QToolButton* reset = nullptr;
     };
 
     QVector<StyleWidget> styleWidgets;
@@ -81,13 +93,14 @@ private:
     QPushButton* buttonApplyToAllParts = nullptr;
 
     void unhandledType(const StyleWidget);
-    QVariant getValue(StyleId idx);
+    PropertyValue getValue(StyleId idx);
     void setValues();
 
-    QVariant styleValue(StyleId id) const;
-    QVariant defaultStyleValue(StyleId id) const;
+    PropertyValue styleValue(StyleId id) const;
+    PropertyValue defaultStyleValue(StyleId id) const;
     bool hasDefaultStyleValue(StyleId id) const;
-    void setStyleValue(StyleId id, const QVariant& value);
+    void setStyleQVariantValue(StyleId id, const QVariant& value);
+    void setStyleValue(StyleId id, const PropertyValue& value);
 
     int numberOfPage;
     int pageListMap[50];
@@ -124,6 +137,10 @@ private slots:
     void stringToArray(std::string, int*);
     std::string arrayToString(int*);
     std::string ConsecutiveStr(int);
+
+private:
+    QString m_currentPageCode;
+    QString m_currentSubPageCode;
 };
 }
 

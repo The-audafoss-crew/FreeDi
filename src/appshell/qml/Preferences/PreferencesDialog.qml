@@ -38,10 +38,19 @@ StyledDialogView {
     resizable: true
 
     property string currentPageId: ""
+    property var params: null
 
-    property QtObject privatesProperties: QtObject {
+    property QtObject prv: QtObject {
         property var pagesObjects: (new Map())
-        property bool inited: false
+
+        function resolveStackCurrentIndex() {
+            var keys = Object.keys(root.prv.pagesObjects)
+            return keys.indexOf(preferencesModel.currentPageId)
+        }
+
+        function updateStackCurrentIndex() {
+            stack.currentIndex = resolveStackCurrentIndex()
+        }
     }
 
     Component.onCompleted: {
@@ -49,7 +58,7 @@ StyledDialogView {
 
         initPagesObjects()
 
-        root.privatesProperties.inited = true
+        prv.updateStackCurrentIndex()
     }
 
     function initPagesObjects() {
@@ -60,7 +69,20 @@ StyledDialogView {
             var pagePath = Boolean(pageInfo.path) ? pageInfo.path : "Preferences/StubPreferencesPage.qml"
             var pageComponent = Qt.createComponent("../" + pagePath)
 
-            var obj = pageComponent.createObject(stack)
+            var properties = {
+                navigationSection: root.navigationSection,
+                navigationOrderStart: (i + 1) * 100
+            }
+
+            if (root.currentPageId === pageInfo.id) {
+                var params = root.params
+                for (var key in params) {
+                    var value = params[key]
+                    properties[key] = value
+                }
+            }
+
+            var obj = pageComponent.createObject(stack, properties)
 
             if (!Boolean(obj)) {
                 continue
@@ -70,12 +92,16 @@ StyledDialogView {
                 root.hide()
             })
 
-            root.privatesProperties.pagesObjects[pageInfo.id] = obj
+            root.prv.pagesObjects[pageInfo.id] = obj
         }
     }
 
     PreferencesModel {
         id: preferencesModel
+
+        onCurrentPageIdChanged: function(currentPageId) {
+            prv.updateStackCurrentIndex()
+        }
     }
 
     ColumnLayout {
@@ -95,28 +121,16 @@ StyledDialogView {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 220
 
+                navigation.section: root.navigationSection
+                navigation.order: 1
+
                 model: preferencesModel
             }
 
             SeparatorLine { orientation: Qt.Vertical }
 
-            Rectangle {
-                Layout.fillHeight: true
-                Layout.fillWidth: true
-
-                color: ui.theme.backgroundSecondaryColor
-
-                StackLayout {
-                    id: stack
-
-                    anchors.fill: parent
-                    anchors.margins: 30
-
-                    currentIndex: {
-                        var keys = Object.keys(root.privatesProperties.pagesObjects)
-                        return keys.indexOf(preferencesModel.currentPageId)
-                    }
-                }
+            StackLayout {
+                id: stack
             }
         }
 
@@ -128,7 +142,18 @@ StyledDialogView {
             Layout.fillWidth: true
             Layout.preferredHeight: 70
 
+            navigation.section: root.navigationSection
+            navigation.order: 100000
+
             onRevertFactorySettingsRequested: {
+                var pages = preferencesModel.availablePages()
+
+                for (var i in pages) {
+                    var page = pages[i]
+                    var obj = root.prv.pagesObjects[page.id]
+                    obj.reset()
+                }
+
                 preferencesModel.resetFactorySettings()
             }
 
@@ -145,7 +170,7 @@ StyledDialogView {
 
                 for (var i in pages) {
                     var page = pages[i]
-                    var obj = root.privatesProperties.pagesObjects[page.id]
+                    var obj = root.prv.pagesObjects[page.id]
                     ok &= obj.apply()
                 }
 

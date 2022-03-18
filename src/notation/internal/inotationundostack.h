@@ -24,9 +24,13 @@
 #define MU_SCENE_NOTATION_INOTATIONUNDOSTACK_H
 
 #include "async/notification.h"
+#include "async/channel.h"
+
+#include "notation/notationtypes.h"
 
 namespace Ms {
 class EditData;
+enum class ElementType;
 }
 
 namespace mu::notation {
@@ -46,6 +50,10 @@ public:
     virtual void prepareChanges() = 0;
     virtual void rollbackChanges() = 0;
     virtual void commitChanges() = 0;
+
+    virtual void lock() = 0;
+    virtual void unlock() = 0;
+    virtual bool isLocked() const = 0;
 
     virtual async::Notification stackChanged() const = 0;
 };

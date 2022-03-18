@@ -119,18 +119,50 @@ Channel<AudioOutputParams> AudioOutputHandler::masterOutputParamsChanged() const
     return m_masterOutputParamsChanged;
 }
 
-Channel<audioch_t, float> AudioOutputHandler::masterSignalAmplitudeChanged() const
+Promise<AudioResourceMetaList> AudioOutputHandler::availableOutputResources() const
 {
-    ONLY_AUDIO_MAIN_OR_WORKER_THREAD;
+    return Promise<AudioResourceMetaList>([this](Promise<AudioResourceMetaList>::Resolve resolve,
+                                                 Promise<AudioResourceMetaList>::Reject /*reject*/) {
+        ONLY_AUDIO_WORKER_THREAD;
 
-    return m_masterSignalAmplitudeChanged;
+        resolve(fxResolver()->resolveAvailableResources());
+    }, AudioThread::ID);
 }
 
-Channel<audioch_t, volume_dbfs_t> AudioOutputHandler::masterVolumePressureChanged() const
+Promise<AudioSignalChanges> AudioOutputHandler::signalChanges(const TrackSequenceId sequenceId, const TrackId trackId) const
 {
-    ONLY_AUDIO_MAIN_OR_WORKER_THREAD;
+    return Promise<AudioSignalChanges>([this, sequenceId, trackId](Promise<AudioSignalChanges>::Resolve resolve,
+                                                                   Promise<AudioSignalChanges>::Reject reject) {
+        ONLY_AUDIO_WORKER_THREAD;
 
-    return m_masterVolumePressureChanged;
+        ITrackSequencePtr s = sequence(sequenceId);
+
+        if (!s) {
+            reject(static_cast<int>(Err::InvalidSequenceId), "invalid sequence id");
+            return;
+        }
+
+        if (!s->audioIO()->isHasTrack(trackId)) {
+            reject(static_cast<int>(Err::InvalidTrackId), "no track");
+            return;
+        }
+
+        resolve(s->audioIO()->audioSignalChanges(trackId));
+    }, AudioThread::ID);
+}
+
+Promise<AudioSignalChanges> AudioOutputHandler::masterSignalChanges() const
+{
+    return Promise<AudioSignalChanges>([this](Promise<AudioSignalChanges>::Resolve resolve,
+                                              Promise<AudioSignalChanges>::Reject reject) {
+        ONLY_AUDIO_WORKER_THREAD;
+
+        IF_ASSERT_FAILED(mixer()) {
+            reject(static_cast<int>(Err::Undefined), "undefined reference to a mixer");
+        }
+
+        resolve(mixer()->masterAudioSignalChanges());
+    }, AudioThread::ID);
 }
 
 std::shared_ptr<Mixer> AudioOutputHandler::mixer() const
@@ -160,9 +192,11 @@ void AudioOutputHandler::ensureSeqSubscriptions(const ITrackSequencePtr s) const
         return;
     }
 
+    TrackSequenceId sequenceId = s->id();
+
     if (!s->audioIO()->outputParamsChanged().isConnected()) {
-        s->audioIO()->outputParamsChanged().onReceive(this, [this, s](const TrackId trackId, const AudioOutputParams& params) {
-            m_outputParamsChanged.send(s->id(), trackId, params);
+        s->audioIO()->outputParamsChanged().onReceive(this, [this, sequenceId](const TrackId trackId, const AudioOutputParams& params) {
+            m_outputParamsChanged.send(sequenceId, trackId, params);
         });
     }
 }
@@ -173,18 +207,6 @@ void AudioOutputHandler::ensureMixerSubscriptions() const
 
     if (!mixer()) {
         return;
-    }
-
-    if (!mixer()->masterVolumePressureDbfsChanged().isConnected()) {
-        mixer()->masterVolumePressureDbfsChanged().onReceive(this, [this](const audioch_t ch, const volume_dbfs_t value) {
-            m_masterVolumePressureChanged.send(ch, value);
-        });
-    }
-
-    if (!mixer()->masterSignalAmplitudeRmsChanged().isConnected()) {
-        mixer()->masterSignalAmplitudeRmsChanged().onReceive(this, [this](const audioch_t ch, const float value) {
-            m_masterSignalAmplitudeChanged.send(ch, value);
-        });
     }
 
     if (!mixer()->masterOutputParamsChanged().isConnected()) {

@@ -108,6 +108,7 @@ public:
         TEXT_ITALIC = 0xEF40,
         TEXT_UNDERLINE = 0xEF41,
         TEXT_BOLD = 0xEF42,
+        TEXT_STRIKE = 0xF424,
         APPLY_GLOBAL_STYLE = 0xEF43,
         HAIRPIN = 0xEF44,
         ACCIDENTAL_SHARP = 0xEF45,
@@ -186,15 +187,18 @@ public:
         ACCOUNT = 0xEF99,
 
         STAR = 0xEF9A,
+        LINE_WITH_TWO_INVERTED_HOOKS = 0xEF9B,
         LINE_WITH_T_LIKE_END_HOOK = 0xEF9C,
         LINE_WITH_T_LINE_START_HOOK = 0xEF9D,
         LINE_WITH_START_HOOK = 0xEF9E,
         LINE_WITH_ANGLED_START_HOOK = 0xEF9F,
+        LINE_WITH_INVERTED_START_HOOK = 0xEFA0,
         IMAGE_MOUNTAINS = 0xEFA1,
 
         GRADUATION_CAP = 0xF19D,
 
         SCORE = 0xF319,
+        CLEF_TREBLE = 0xF31A,
 
         AUTO_TEXT = 0xF329,
         NOTE_HEAD_EIGHTH = 0xF33A,
@@ -276,6 +280,8 @@ public:
         TENUTO = 0xF38D,
         STACCATO = 0xF38E,
 
+        BYPASS = 0xF38F,
+
         VOICE_1 = 0xF391,
         VOICE_2 = 0xF392,
         VOICE_3 = 0xF393,
@@ -285,6 +291,8 @@ public:
         NOTE_DOTTED_4 = 0xF397,
 
         COPY = 0xF398,
+        PASTE = 0xF399,
+        CUT = 0xF39A,
 
         NOTE_PLUS = 0xF39D,
         NOTE_TO_RIGHT = 0xF39E,
@@ -305,6 +313,9 @@ public:
 
         PRINT = 0xF3B7,
 
+        DOWN = 0xF3C1,
+        UP = 0xF3C2,
+
         LOOP_IN = 0xF3C7,
         LOOP_OUT = 0xF3C8,
         PAUSE = 0xF3C9,
@@ -314,9 +325,45 @@ public:
         ERROR = 0xF3D0,
         QUESTION = 0xF3D1,
 
-        AUTO,
-        NONE,
-        CUSTOM
+        MUTE = 0xF3D5,
+        SOLO = 0xF3D6,
+
+        OTTAVA = 0xF40D,
+        PALM_MUTE = 0xF40E,
+        LET_RING = 0xF40F,
+        VOLTA = 0xF410,
+        VIBRATO = 0xF411,
+        DIMINUENDO = 0xF414,
+        CRESCENDO = 0xF415,
+
+        APP_MINIMIZE = 0xF41C,
+        APP_MAXIMIZE = 0xF41D,
+        APP_UNMAXIMIZE = 0xF41E,
+        APP_CLOSE = 0xF41F,
+
+        NOTEFLAGS_TRADITIONAL = 0xF420,
+        NOTEFLAGS_STRAIGHT = 0xF421,
+
+        TUPLET_NUMBER_WITH_BRACKETS = 0xF422,
+        TUPLET_NUMBER_ONLY = 0xF423,
+
+        USE_WIDE_BEAMS_REGULAR = 0xF425,
+        USE_WIDE_BEAMS_WIDE = 0xF426,
+
+        ACCIACCATURA = 0xF427,
+        APPOGGIATURA = 0xF428,
+        GRACE4 = 0xF429,
+        GRACE16 = 0xF42A,
+        GRACE32 = 0xF42B,
+        GRACE8_AFTER = 0xF42C,
+        GRACE16_AFTER = 0xF42D,
+        GRACE32_AFTER = 0xF42E,
+
+        MEASURE_REPEAT = 0xF431,
+
+        INSERT_ONE_MEASURE = 0xF432,
+
+        NONE = 0xFFFF
     };
 
     Q_ENUM(Code)

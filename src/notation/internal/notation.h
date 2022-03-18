@@ -22,13 +22,13 @@
 #ifndef MU_NOTATION_NOTATION_H
 #define MU_NOTATION_NOTATION_H
 
-#include "inotation.h"
-#include "igetscore.h"
-#include "inotationmidievents.h"
 #include "async/asyncable.h"
-
 #include "modularity/ioc.h"
-#include "inotationconfiguration.h"
+#include "iengravingconfiguration.h"
+
+#include "../inotation.h"
+#include "igetscore.h"
+#include "../inotationconfiguration.h"
 
 namespace Ms {
 class MScore;
@@ -41,6 +41,7 @@ class NotationPlayback;
 class Notation : virtual public INotation, public IGetScore, public async::Asyncable
 {
     INJECT_STATIC(notation, INotationConfiguration, configuration)
+    INJECT(notation, engraving::IEngravingConfiguration, engravingConfiguration)
 
 public:
     explicit Notation(Ms::Score* score = nullptr);
@@ -48,27 +49,27 @@ public:
 
     static void init();
 
-    Meta metaInfo() const override;
-    void setMetaInfo(const Meta& meta) override;
+    QString name() const override;
+    QString projectName() const override;
+    QString projectNameAndPartName() const override;
 
-    instruments::ScoreOrder scoreOrder() const override;
+    QString workTitle() const override;
+    QString projectWorkTitle() const override;
+    QString projectWorkTitleAndPartName() const override;
 
-    INotationPtr clone() const override;
+    bool isOpen() const override;
+    void setIsOpen(bool open) override;
+    async::Notification openChanged() const override;
 
-    void setViewSize(const QSizeF& vs) override;
     void setViewMode(const ViewMode& viewMode) override;
     ViewMode viewMode() const override;
-    void paint(draw::Painter* painter, const RectF& frameRect) override;
 
-    ValCh<bool> opened() const override;
-    void setOpened(bool opened) override;
-
+    INotationPaintingPtr painting() const override;
     INotationInteractionPtr interaction() const override;
     INotationMidiInputPtr midiInput() const override;
     INotationUndoStackPtr undoStack() const override;
     INotationElementsPtr elements() const override;
     INotationStylePtr style() const override;
-    INotationPlaybackPtr playback() const override;
     INotationAccessibilityPtr accessibility() const override;
     INotationPartsPtr parts() const override;
 
@@ -77,35 +78,25 @@ public:
 protected:
     Ms::Score* score() const override;
     void setScore(Ms::Score* score);
-    Ms::MScore* scoreGlobal() const;
     void notifyAboutNotationChanged();
 
     INotationPartsPtr m_parts = nullptr;
+    INotationUndoStackPtr m_undoStack = nullptr;
+    async::Notification m_notationChanged;
 
 private:
     friend class NotationInteraction;
+    friend class NotationPainting;
 
-    void paintPages(mu::draw::Painter* painter, const RectF& frameRect, const QList<Ms::Page*>& pages, bool paintBorders) const;
-    void paintPageBorder(mu::draw::Painter* painter, const Ms::Page* page) const;
-    void paintForeground(mu::draw::Painter* painter, const RectF& pageRect) const;
-
-    QSizeF viewSize() const;
-
-    QSizeF m_viewSize;
-    Ms::MScore* m_scoreGlobal = nullptr;
     Ms::Score* m_score = nullptr;
-    ValCh<bool> m_opened;
+    async::Notification m_openChanged;
 
+    INotationPaintingPtr m_painting = nullptr;
     INotationInteractionPtr m_interaction = nullptr;
-    INotationMidiEventsPtr m_midiEventsProvider = nullptr;
-    INotationPlaybackPtr m_playback = nullptr;
-    INotationUndoStackPtr m_undoStack = nullptr;
     INotationStylePtr m_style = nullptr;
     INotationMidiInputPtr m_midiInput = nullptr;
     INotationAccessibilityPtr m_accessibility = nullptr;
     INotationElementsPtr m_elements = nullptr;
-
-    async::Notification m_notationChanged;
 };
 }
 

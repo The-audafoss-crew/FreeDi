@@ -32,21 +32,26 @@ Dialog {
 
     signal applySequenceRequested(var newSequence)
 
-    function startEdit(sequence, allShortcuts) {
+    function startEdit(shortcut, allShortcuts) {
         open()
-        model.load(sequence, allShortcuts)
+        model.load(shortcut, allShortcuts)
         content.forceActiveFocus()
     }
 
     height: 240
     width: 538
 
-    title: qsTrc("shortcuts", "Enter Shortcut Sequence")
+    title: qsTrc("shortcuts", "Enter shortcut sequence")
 
     standardButtons: Dialog.NoButton
 
     EditShortcutModel {
         id: model
+
+        onApplyNewSequenceRequested: function(newSequence) {
+            root.applySequenceRequested(newSequence)
+            root.accept()
+        }
     }
 
     Rectangle {
@@ -68,7 +73,9 @@ Dialog {
                 anchors.horizontalCenter: parent.horizontalCenter
 
                 width: parent.width
-                text: qsTrc("shortcuts", "Define Keyboard Shortcut.")
+                text: qsTrc("shortcuts", "Define keyboard shortcut")
+                horizontalAlignment: Text.AlignLeft
+                font:ui.theme.headerBoldFont
             }
 
             Column {
@@ -155,11 +162,10 @@ Dialog {
                     width: parent.buttonWidth
 
                     text: qsTrc("global", "Add")
-                    enabled: model.canApplySequence
+                    enabled: model.canApplyInputedSequence
 
                     onClicked: {
-                        root.applySequenceRequested(model.unitedSequence())
-                        root.accept()
+                        model.addToOriginSequence()
                     }
                 }
 
@@ -167,11 +173,10 @@ Dialog {
                     width: parent.buttonWidth
 
                     text: qsTrc("global", "Replace")
-                    enabled: model.canApplySequence
+                    enabled: model.canApplyInputedSequence
 
                     onClicked: {
-                        root.applySequenceRequested(model.inputedSequence)
-                        root.accept()
+                        model.replaceOriginSequence()
                     }
                 }
 
@@ -187,11 +192,11 @@ Dialog {
             }
         }
 
-        Keys.onShortcutOverride: {
+        Keys.onShortcutOverride: function(event) {
             event.accepted = true
         }
 
-        Keys.onPressed: {
+        Keys.onPressed: function(event) {
             model.inputKey(event.key, event.modifiers)
         }
     }

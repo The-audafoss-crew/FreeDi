@@ -25,7 +25,7 @@
 #include "log.h"
 
 using namespace mu::appshell;
-using namespace mu::ui;
+using namespace mu::uicomponents;
 
 PublishToolBarModel::PublishToolBarModel(QObject* parent)
     : AbstractMenuModel(parent)
@@ -38,9 +38,8 @@ void PublishToolBarModel::load()
 
     MenuItemList items {
         makeMenuItem("print"),
-        makeMenuItem("file-save-online"),
-        makeMenuItem("file-export"),
-        makeMenuItem("toggle-imagecapture")
+        makeMenuItem("file-publish"),
+        makeMenuItem("file-export")
     };
 
     setItems(items);

@@ -23,6 +23,7 @@
 #include "translation.h"
 #include "interactive/messagebox.h"
 
+#include "factory.h"
 #include "utils.h"
 #include "score.h"
 #include "chord.h"
@@ -40,6 +41,8 @@
 #include "excerpt.h"
 #include "accidental.h"
 #include "measurerepeat.h"
+
+#include "masterscore.h"
 
 using namespace mu;
 using namespace mu::engraving;
@@ -80,7 +83,7 @@ NoteVal Score::noteValForPosition(Position pos, AccidentalType at, bool& error)
             return nval;
         }
         nval.headGroup = ds->noteHead(nval.pitch);
-        if (nval.headGroup == NoteHead::Group::HEAD_INVALID) {
+        if (nval.headGroup == NoteHeadGroup::HEAD_INVALID) {
             error = true;
             return nval;
         }
@@ -99,7 +102,7 @@ NoteVal Score::noteValForPosition(Position pos, AccidentalType at, bool& error)
         }
         // build a default NoteVal for that string
         nval.string = line;
-        if (pos.fret != FRET_NONE) {                  // if a fret is given, use it
+        if (pos.fret != INVALID_FRET_INDEX) {                  // if a fret is given, use it
             nval.fret = pos.fret;
         } else {                                      // if no fret, use 0 as default
             _is.setString(line);
@@ -114,7 +117,7 @@ NoteVal Score::noteValForPosition(Position pos, AccidentalType at, bool& error)
         if (nval.fret > 0 && stringData->stringList().at(strgDataIdx).open == true) {
             nval.fret = 0;
         }
-        nval.pitch = stringData->getPitch(line, nval.fret, st, tick);
+        nval.pitch = stringData->getPitch(line, nval.fret, st);
         break;
     }
 
@@ -157,7 +160,7 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
         ChordRest* c = toChordRest(is.lastSegment()->element(is.track()));
 
         if (c == 0 || !c->isChord()) {
-            qDebug("Score::addPitch: cr %s", c ? c->name() : "zero");
+            qDebug("Score::addPitch: cr %s", c ? c->typeName() : "zero");
             return 0;
         }
         Note* note = addNote(toChord(c), nval, /* forceAccidental */ false, is.articulationIds(), externalInputState);
@@ -172,7 +175,7 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
     expandVoice(is.segment(), is.track());
 
     // insert note
-    Direction stemDirection = Direction::AUTO;
+    DirectionV stemDirection = DirectionV::AUTO;
     int track               = is.track();
     if (is.drumNote() != -1) {
         nval.pitch        = is.drumNote();
@@ -200,7 +203,7 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
         //   We could split the duration at the barline and continue into the next bar, but this would create extra
         //   notes, extra ties, and extra pain. Instead, we simply truncate the duration at the barline.
         Fraction ticks2measureEnd = is.segment()->measure()->ticks() - is.segment()->rtick();
-        duration = is.duration() > ticks2measureEnd ? ticks2measureEnd : is.duration().fraction();
+        duration = is.duration().fraction() > ticks2measureEnd ? ticks2measureEnd : is.duration().fraction();
     } else {
         duration = is.duration().fraction();
     }
@@ -212,7 +215,7 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
         // for keyboard input (where we are given a staff position), there is a separate function Score::repitchNote()
         // the code is similar enough that it could possibly be refactored
         Chord* chord = toChord(is.cr());
-        note = new Note(this);
+        note = Factory::createNote(chord);
         note->setParent(chord);
         note->setTrack(chord->track());
         note->setNval(nval);
@@ -263,7 +266,7 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
         // recreate tie forward if there is a note to tie to
         // one-sided ties will not be recreated
         if (firstTiedNote) {
-            Tie* tie = new Tie(this);
+            Tie* tie = Factory::createTie(note);
             tie->setStartNote(note);
             tie->setEndNote(firstTiedNote);
             tie->setTick(tie->startNote()->tick());
@@ -288,7 +291,7 @@ Note* Score::addPitch(NoteVal& nval, bool addFlag, InputState* externalInputStat
         ChordRest* e = searchNote(is.tick(), is.track());
         if (e) {
             Fraction stick = Fraction(0, 1);
-            Element* ee = is.slur()->startElement();
+            EngravingItem* ee = is.slur()->startElement();
             if (ee->isChordRest()) {
                 stick = toChordRest(ee)->tick();
             } else if (ee->isNote()) {
@@ -365,11 +368,12 @@ void Score::putNote(const Position& p, bool replace)
     _is.setTrack(p.staffIdx * VOICES + _is.voice());
     _is.setSegment(s);
 
-    if (score()->excerpt() && !score()->excerpt()->tracks().isEmpty() && score()->excerpt()->tracks().key(_is.track(), -1) == -1) {
+    if (score()->excerpt() && !score()->excerpt()->tracksMapping().isEmpty()
+        && score()->excerpt()->tracksMapping().key(_is.track(), -1) == -1) {
         return;
     }
 
-    Direction stemDirection = Direction::AUTO;
+    DirectionV stemDirection = DirectionV::AUTO;
     bool error;
     NoteVal nval = noteValForPosition(p, _is.accidentalType(), error);
     if (error) {
@@ -435,7 +439,7 @@ void Score::putNote(const Position& p, bool replace)
                             int fret = note->fret() * 10 + nval.fret;
                             if (fret <= stringData->frets()) {
                                 nval.fret = fret;
-                                nval.pitch = stringData->getPitch(nval.string, nval.fret, st, s->tick());
+                                nval.pitch = stringData->getPitch(nval.string, nval.fret, st);
                             } else {
                                 qDebug("can't increase fret to %d", fret);
                             }
@@ -481,7 +485,8 @@ void Score::putNote(const Position& p, bool replace)
         setNoteRest(_is.segment(), _is.track(), nval, _is.duration().fraction(), stemDirection, forceAccidental, _is.articulationIds());
         _is.setAccidentalType(AccidentalType::NONE);
     }
-    if (!st->isTabStaff(cr->tick())) {
+
+    if (cr && !st->isTabStaff(cr->tick())) {
         _is.moveToNextInputPos();
     }
 }
@@ -545,7 +550,7 @@ void Score::repitchNote(const Position& p, bool replace)
     } else {
         chord = toChord(cr);
     }
-    Note* note = new Note(this);
+    Note* note = Factory::createNote(chord);
     note->setParent(chord);
     note->setTrack(chord->track());
     note->setNval(nval);
@@ -603,7 +608,7 @@ void Score::repitchNote(const Position& p, bool replace)
         int tpc = styleB(Sid::concertPitch) ? nval.tpc1 : nval.tpc2;
         AccidentalVal alter = tpc2alter(tpc);
         at = Accidental::value2subtype(alter);
-        Accidental* a = new Accidental(this);
+        Accidental* a = Factory::createAccidental(note);
         a->setAccidentalType(at);
         a->setRole(AccidentalRole::USER);
         a->setParent(note);
@@ -614,7 +619,7 @@ void Score::repitchNote(const Position& p, bool replace)
     // recreate tie forward if there is a note to tie to
     // one-sided ties will not be recreated
     if (firstTiedNote) {
-        Tie* tie = new Tie(this);
+        Tie* tie = Factory::createTie(note);
         tie->setStartNote(note);
         tie->setEndNote(firstTiedNote);
         tie->setTick(tie->startNote()->tick());
@@ -644,7 +649,7 @@ void Score::insertChord(const Position& pos)
     //    - check voices
     //    - split chord/rest
 
-    Element* el = selection().element();
+    EngravingItem* el = selection().element();
     if (!el || !(el->isNote() || el->isRest())) {
         return;
     }
@@ -697,7 +702,7 @@ void Score::localInsertChord(const Position& pos)
 
     Segment* firstSeg = msMeasure->first(SegmentType::ChordRest);
     for (int track = 0; track < msTracks; ++track) {
-        Element* maybeRest = firstSeg->element(track);
+        EngravingItem* maybeRest = firstSeg->element(track);
         bool measureIsFull = false;
 
         // I. Convert any measure rests into normal (non-measure) rest(s) of equivalent duration
@@ -801,7 +806,7 @@ void Score::globalInsertChord(const Position& pos)
     if (track != -1) {
         Measure* m = tick2measure(dtick);
         Segment* s = m->findSegment(SegmentType::ChordRest, dtick);
-        Element* e = s->element(track);
+        EngravingItem* e = s->element(track);
         if (e) {
             select(e->isChord() ? toChord(e)->notes().front() : e);
         }

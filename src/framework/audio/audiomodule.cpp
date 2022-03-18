@@ -31,15 +31,16 @@
 #include "internal/audiosanitizer.h"
 #include "internal/audiothread.h"
 #include "internal/audiobuffer.h"
+#include "internal/audiothreadsecurer.h"
 
 #include "internal/worker/audioengine.h"
 #include "internal/worker/playback.h"
 
 // synthesizers
-#include "internal/synthesizers/fluidsynth/fluidsynth.h"
-#include "internal/synthesizers/soundfontsprovider.h"
-#include "internal/synthesizers/synthesizercontroller.h"
-#include "internal/synthesizers/synthesizersregister.h"
+#include "internal/synthesizers/fluidsynth/fluidresolver.h"
+#include "internal/synthesizers/synthresolver.h"
+
+#include "internal/fx/fxresolver.h"
 
 #include "view/synthssettingsmodel.h"
 #include "devtools/waveformmodel.h"
@@ -50,10 +51,15 @@
 
 using namespace mu::modularity;
 using namespace mu::audio;
+using namespace mu::audio::synth;
+using namespace mu::audio::fx;
 
 static std::shared_ptr<AudioConfiguration> s_audioConfiguration = std::make_shared<AudioConfiguration>();
 static std::shared_ptr<AudioThread> s_audioWorker = std::make_shared<AudioThread>();
 static std::shared_ptr<mu::audio::AudioBuffer> s_audioBuffer = std::make_shared<mu::audio::AudioBuffer>();
+
+static std::shared_ptr<FxResolver> s_fxResolver = std::make_shared<FxResolver>();
+static std::shared_ptr<SynthResolver> s_synthResolver = std::make_shared<SynthResolver>();
 
 static std::shared_ptr<Playback> s_playbackFacade = std::make_shared<Playback>();
 
@@ -97,16 +103,12 @@ std::string AudioModule::moduleName() const
 void AudioModule::registerExports()
 {
     ioc()->registerExport<IAudioConfiguration>(moduleName(), s_audioConfiguration);
+    ioc()->registerExport<IAudioThreadSecurer>(moduleName(), std::make_shared<AudioThreadSecurer>());
     ioc()->registerExport<IAudioDriver>(moduleName(), s_audioDriver);
     ioc()->registerExport<IPlayback>(moduleName(), s_playbackFacade);
 
-    // synthesizers
-    std::shared_ptr<synth::ISynthesizersRegister> sreg = std::make_shared<synth::SynthesizersRegister>();
-    sreg->registerSynthesizer("Fluid", std::make_shared<synth::FluidSynth>());
-    sreg->setDefaultSynthesizer("Fluid");
-
-    ioc()->registerExport<synth::ISynthesizersRegister>(moduleName(), sreg);
-    ioc()->registerExport<synth::ISoundFontsProvider>(moduleName(), new synth::SoundFontsProvider());
+    ioc()->registerExport<ISynthResolver>(moduleName(), s_synthResolver);
+    ioc()->registerExport<IFxResolver>(moduleName(), s_fxResolver);
 }
 
 void AudioModule::registerResources()
@@ -192,6 +194,11 @@ void AudioModule::onInit(const framework::IApplication::RunMode& mode)
         AudioEngine::instance()->setSampleRate(activeSpec.sampleRate);
         AudioEngine::instance()->setReadBufferSize(activeSpec.samples);
 
+        auto fluidResolver = std::make_shared<FluidResolver>(s_audioConfiguration->soundFontDirectories(),
+                                                             s_audioConfiguration->soundFontDirectoriesChanged());
+        s_synthResolver->registerResolver(AudioSourceType::Fluid, fluidResolver);
+        s_synthResolver->init(s_audioConfiguration->defaultAudioInputParams());
+
         // Initialize IPlayback facade and make sure that it's initialized after the audio-engine
         s_playbackFacade->init();
     };
@@ -206,7 +213,7 @@ void AudioModule::onInit(const framework::IApplication::RunMode& mode)
     //! --- Diagnostics ---
     auto pr = ioc()->resolve<diagnostics::IDiagnosticsPathsRegister>(moduleName());
     if (pr) {
-        std::vector<io::path> paths = s_audioConfiguration->soundFontPaths();
+        std::vector<io::path> paths = s_audioConfiguration->soundFontDirectories();
         for (const io::path& p : paths) {
             pr->reg("soundfonts", p);
         }

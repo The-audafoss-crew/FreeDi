@@ -44,18 +44,29 @@ class ShortcutsRegister : public IShortcutsRegister, public async::Asyncable
 public:
     ShortcutsRegister() = default;
 
-    void load();
+    void init();
+
+    void reload(bool onlyDef = false) override;
 
     const ShortcutList& shortcuts() const override;
     Ret setShortcuts(const ShortcutList& shortcuts) override;
+    void resetShortcuts() override;
     async::Notification shortcutsChanged() const override;
+
+    Ret setAdditionalShortcuts(const std::string& context, const ShortcutList& shortcuts) override;
 
     const Shortcut& shortcut(const std::string& actionCode) const override;
     const Shortcut& defaultShortcut(const std::string& actionCode) const override;
+
+    bool isRegistered(const std::string& sequence) const override;
     ShortcutList shortcutsForSequence(const std::string& sequence) const override;
 
     Ret importFromFile(const io::path& filePath) override;
     Ret exportToFile(const io::path& filePath) const override;
+
+    bool active() override;
+    void setActive(bool active) override;
+    async::Notification activeChanged() const override;
 
 private:
 
@@ -65,13 +76,29 @@ private:
     bool writeToFile(const ShortcutList& shortcuts, const io::path& path) const;
     void writeShortcut(framework::XmlWriter& writer, const Shortcut& shortcut) const;
 
-    void mergeSortcuts(ShortcutList& shortcuts, const ShortcutList& defaultShortcuts) const;
+    void mergeShortcuts(ShortcutList& shortcuts, const ShortcutList& defaultShortcuts) const;
+    void mergeAdditionalShortcuts(ShortcutList& shortcuts);
+
+    void makeUnique(ShortcutList& shortcuts);
     void expandStandardKeys(ShortcutList& shortcuts) const;
+
+    ShortcutList filterAndUpdateAdditionalShortcuts(const ShortcutList& shortcuts);
 
     ShortcutList m_shortcuts;
     ShortcutList m_defaultShortcuts;
+    QHash<std::string, ShortcutList> m_additionalShortcutsHash;
     async::Notification m_shortcutsChanged;
+
+    bool m_isActive = true;
+    async::Notification m_activeChanged;
 };
+}
+
+namespace std {
+inline uint qHash(const std::string& key, uint seed = 0)
+{
+    return ::qHash(QByteArray::fromRawData(key.data(), static_cast<int>(key.length())), seed);
+}
 }
 
 #endif // MU_SHORTCUTS_SHORTCUTSREGISTER_H

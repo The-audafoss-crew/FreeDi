@@ -25,9 +25,12 @@
 
 #include <set>
 
-#include "element.h"
+#include "engravingitem.h"
 #include "mscore.h"
-#include "symid.h"
+
+namespace mu::engraving {
+class Factory;
+}
 
 namespace Ms {
 class ChordRest;
@@ -73,24 +76,27 @@ std::set<SymId> updateArticulations(const std::set<SymId>& articulationSymbolIds
                                     ArticulationsUpdateMode updateMode = ArticulationsUpdateMode::Insert);
 std::set<SymId> splitArticulations(const std::set<SymId>& articulationSymbolIds);
 std::set<SymId> joinArticulations(const std::set<SymId>& articulationSymbolIds);
-std::set<SymId> flipArticulations(const std::set<SymId>& articulationSymbolIds, Placement placement);
+std::set<SymId> flipArticulations(const std::set<SymId>& articulationSymbolIds, PlacementV placement);
 
 //---------------------------------------------------------
 //   @@ Articulation
 ///    articulation marks
 //---------------------------------------------------------
 
-class Articulation final : public Element
+class Articulation final : public EngravingItem
 {
     SymId _symId;
-    Direction _direction;
+    DirectionV _direction;
     QString _channelName;
 
     ArticulationAnchor _anchor;
 
     bool _up;
-    MScore::OrnamentStyle _ornamentStyle;       // for use in ornaments such as trill
+    OrnamentStyle _ornamentStyle;       // for use in ornaments such as trill
     bool _playArticulation;
+
+    friend class mu::engraving::Factory;
+    Articulation(ChordRest* parent);
 
     void draw(mu::draw::Painter*) const override;
 
@@ -102,19 +108,17 @@ class Articulation final : public Element
     static AnchorGroup anchorGroup(SymId);
 
 public:
-    Articulation(Score*);
-    Articulation(SymId, Score*);
+
     Articulation& operator=(const Articulation&) = delete;
 
     Articulation* clone() const override { return new Articulation(*this); }
-    ElementType type() const override { return ElementType::ARTICULATION; }
 
     qreal mag() const override;
 
     SymId symId() const { return _symId; }
     void setSymId(SymId id);
     int subtype() const override;
-    QString userName() const override;
+    QString typeUserName() const override;
     const char* articulationName() const;    // type-name of articulation; used for midi rendering
     static const char* symId2ArticulationName(SymId symId);
 
@@ -127,9 +131,9 @@ public:
 
     QVector<mu::LineF> dragAnchorLines() const override;
 
-    QVariant getProperty(Pid propertyId) const override;
-    bool setProperty(Pid propertyId, const QVariant&) override;
-    QVariant propertyDefault(Pid) const override;
+    mu::engraving::PropertyValue getProperty(Pid propertyId) const override;
+    bool setProperty(Pid propertyId, const mu::engraving::PropertyValue&) override;
+    mu::engraving::PropertyValue propertyDefault(Pid) const override;
     void resetProperty(Pid id) override;
     Sid getPropertyStyle(Pid id) const override;
 
@@ -137,8 +141,8 @@ public:
 
     bool up() const { return _up; }
     void setUp(bool val);
-    void setDirection(Direction d) { _direction = d; }
-    Direction direction() const { return _direction; }
+    void setDirection(DirectionV d) { _direction = d; }
+    DirectionV direction() const { return _direction; }
 
     ChordRest* chordRest() const;
     Segment* segment() const;
@@ -149,8 +153,8 @@ public:
     ArticulationAnchor anchor() const { return _anchor; }
     void setAnchor(ArticulationAnchor v) { _anchor = v; }
 
-    MScore::OrnamentStyle ornamentStyle() const { return _ornamentStyle; }
-    void setOrnamentStyle(MScore::OrnamentStyle val) { _ornamentStyle = val; }
+    OrnamentStyle ornamentStyle() const { return _ornamentStyle; }
+    void setOrnamentStyle(OrnamentStyle val) { _ornamentStyle = val; }
 
     bool playArticulation() const { return _playArticulation; }
     void setPlayArticulation(bool val) { _playArticulation = val; }
@@ -166,7 +170,9 @@ public:
     bool isAccent() const;
     bool isMarcato() const;
     bool isLuteFingering() const;
+
     bool isOrnament() const;
+    static bool isOrnament(int subtype);
 
     void doAutoplace();
 };

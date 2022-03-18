@@ -26,20 +26,18 @@
 
 #include "modularity/ioc.h"
 #include "async/asyncable.h"
-#include "userscores/iuserscoresconfiguration.h"
+#include "project/iprojectconfiguration.h"
 #include "notation/inotationconfiguration.h"
 #include "plugins/ipluginsconfiguration.h"
-#include "extensions/iextensionsconfiguration.h"
 
 namespace mu::appshell {
 class FoldersPreferencesModel : public QAbstractListModel, public async::Asyncable
 {
     Q_OBJECT
 
-    INJECT(appshell, userscores::IUserScoresConfiguration, userScoresConfiguration)
+    INJECT(appshell, project::IProjectConfiguration, projectConfiguration)
     INJECT(appshell, notation::INotationConfiguration, notationConfiguration)
     INJECT(appshell, plugins::IPluginsConfiguration, pluginsConfiguration)
-    INJECT(appshell, extensions::IExtensionsConfiguration, extensionsConfiguration)
 
 public:
     explicit FoldersPreferencesModel(QObject* parent = nullptr);
@@ -66,8 +64,7 @@ private:
         Templates,
         Plugins,
         SoundFonts,
-        Images,
-        Extensions
+        Images
     };
 
     struct FolderInfo {

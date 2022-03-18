@@ -24,30 +24,45 @@
 #include <QFile>
 #include <QBuffer>
 
+#include "../rw/scorereader.h"
+
+#include "infrastructure/io/localfileinfoprovider.h"
+
 #include "log.h"
+
+Ms::Score::FileError mu::engraving::compat::mscxToMscz(const QString& mscxFilePath, QByteArray* msczData)
+{
+    QFile mscxFile(mscxFilePath);
+    if (!mscxFile.open(QIODevice::ReadOnly)) {
+        LOGE() << "failed open file: " << mscxFilePath;
+        return Ms::Score::FileError::FILE_OPEN_ERROR;
+    }
+
+    QByteArray mscxData = mscxFile.readAll();
+
+    QBuffer buf(msczData);
+    MscWriter::Params params;
+    params.device = &buf;
+    params.filePath = mscxFilePath;
+    params.mode = MscIoMode::Zip;
+    MscWriter writer(params);
+    writer.open();
+    writer.writeScoreFile(mscxData);
+
+    return Ms::Score::FileError::FILE_NO_ERROR;
+}
 
 Ms::Score::FileError mu::engraving::compat::loadMsczOrMscx(Ms::MasterScore* score, const QString& path, bool ignoreVersionError)
 {
     QByteArray msczData;
-    QString filePath = path;
-    if (path.endsWith(".mscx")) {
+    if (path.endsWith(".mscx", Qt::CaseInsensitive)) {
         //! NOTE Convert mscx -> mscz
 
-        QFile mscxFile(path);
-        if (!mscxFile.open(QIODevice::ReadOnly)) {
-            LOGE() << "failed open file: " << path;
-            return Ms::Score::FileError::FILE_OPEN_ERROR;
+        Ms::Score::FileError err = mscxToMscz(path, &msczData);
+        if (err != Ms::Score::FileError::FILE_NO_ERROR) {
+            return err;
         }
-
-        QByteArray mscxData = mscxFile.readAll();
-
-        QBuffer buf(&msczData);
-        MsczWriter writer(&buf);
-        filePath = path + ".mscz";
-        writer.setFilePath(filePath);
-        writer.open();
-        writer.writeScore(mscxData);
-    } else if (path.endsWith(".mscz")) {
+    } else if (path.endsWith(".mscz", Qt::CaseInsensitive)) {
         QFile msczFile(path);
         if (!msczFile.open(QIODevice::ReadOnly)) {
             LOGE() << "failed open file: " << path;
@@ -60,11 +75,57 @@ Ms::Score::FileError mu::engraving::compat::loadMsczOrMscx(Ms::MasterScore* scor
         return Ms::Score::FileError::FILE_UNKNOWN_TYPE;
     }
 
+    score->setFileInfoProvider(std::make_shared<LocalFileInfoProvider>(path));
+
     QBuffer msczBuf(&msczData);
-    MsczReader reader(&msczBuf);
-    reader.setFilePath(filePath);
+    MscReader::Params params;
+    params.device = &msczBuf;
+    params.filePath = path;
+    params.mode = MscIoMode::Zip;
+
+    MscReader reader(params);
     reader.open();
 
-    Ms::Score::FileError err = score->loadMscz(reader, ignoreVersionError);
+    ScoreReader scoreReader;
+    engraving::Err err = scoreReader.loadMscz(score, reader, ignoreVersionError);
+    return err == Err::NoError ? Ms::Score::FileError::FILE_NO_ERROR : Ms::Score::FileError::FILE_ERROR;
+}
+
+mu::engraving::Err mu::engraving::compat::loadMsczOrMscx(EngravingProjectPtr project, const QString& path, bool ignoreVersionError)
+{
+    QByteArray msczData;
+    QString filePath = path;
+    if (path.endsWith(".mscx", Qt::CaseInsensitive)) {
+        //! NOTE Convert mscx -> mscz
+
+        Ms::Score::FileError err = mscxToMscz(path, &msczData);
+        if (err != Ms::Score::FileError::FILE_NO_ERROR) {
+            return scoreFileErrorToErr(err);
+        }
+    } else if (path.endsWith(".mscz", Qt::CaseInsensitive)) {
+        QFile msczFile(path);
+        if (!msczFile.open(QIODevice::ReadOnly)) {
+            LOGE() << "failed open file: " << path;
+            return scoreFileErrorToErr(Ms::Score::FileError::FILE_OPEN_ERROR);
+        }
+
+        msczData = msczFile.readAll();
+    } else {
+        LOGE() << "unknown type, path: " << path;
+        return scoreFileErrorToErr(Ms::Score::FileError::FILE_UNKNOWN_TYPE);
+    }
+
+    project->setFileInfoProvider(std::make_shared<LocalFileInfoProvider>(path));
+
+    QBuffer msczBuf(&msczData);
+    MscReader::Params params;
+    params.device = &msczBuf;
+    params.filePath = filePath;
+    params.mode = MscIoMode::Zip;
+
+    MscReader reader(params);
+    reader.open();
+
+    Err err = project->loadMscz(reader, ignoreVersionError);
     return err;
 }

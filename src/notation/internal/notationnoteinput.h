@@ -30,6 +30,8 @@
 #include "inotationinteraction.h"
 #include "inotationundostack.h"
 
+#include "engraving/infrastructure/draw/geometry.h"
+
 namespace Ms {
 class Score;
 }
@@ -53,25 +55,33 @@ public:
     void toggleNoteInputMethod(NoteInputMethod method) override;
     void addNote(NoteName noteName, NoteAddingMode addingMode) override;
     void padNote(const Pad& pad) override;
-    void putNote(const QPointF& pos, bool replace, bool insert) override;
+    void putNote(const PointF& pos, bool replace, bool insert) override;
+    void removeNote(const PointF& pos) override;
     void setAccidental(AccidentalType accidentalType) override;
     void setArticulation(SymbolId articulationSymbolId) override;
+    void setDrumNote(int note) override;
     void addTuplet(const TupletOptions& options) override;
 
     void addSlur(Ms::Slur* slur) override;
     void resetSlur() override;
-
     void addTie() override;
+
+    void doubleNoteInputDuration() override;
+    void halveNoteInputDuration() override;
 
     void setCurrentVoiceIndex(int voiceIndex) override;
 
-    QRectF cursorRect() const override;
+    void resetInputPosition() override;
+
+    RectF cursorRect() const override;
 
     async::Notification noteAdded() const override;
     async::Notification stateChanged() const override;
 
 private:
     Ms::Score* score() const;
+
+    Ms::EngravingItem* resolveNoteInputStartPosition() const;
 
     void startEdit();
     void apply();

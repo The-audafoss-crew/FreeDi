@@ -19,27 +19,112 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import QtQuick 2.9
-import QtQuick.Layouts 1.3
-import MuseScore.Inspector 1.0
+import QtQuick 2.15
+import QtQuick.Layouts 1.15
+
 import MuseScore.UiComponents 1.0
 import MuseScore.Ui 1.0
+import MuseScore.Inspector 1.0
+
 import "../../common"
 
-PopupViewButton {
+Column {
     id: root
 
-    property alias model: notePopup.model
+    property QtObject model: null
 
-    popupAvailableWidth: parent ? parent.width : 0
+    property NavigationPanel navigationPanel: null
+    property int navigationRowStart: 1
 
-    icon: IconCode.MUSIC_NOTES
-    text: qsTrc("inspector", "Note settings")
+    objectName: "NoteSettings"
 
-    visible: root.model ? !root.model.isEmpty : false
+    width: parent.width
+    spacing: 12
 
-    NotePopup {
-        id: notePopup
+    function focusOnFirst() {
+        tabBar.focusOnCurrentTab()
+    }
+
+    readonly property QtObject headModel: model ? model.modelByType(Inspector.TYPE_NOTEHEAD) : null
+    readonly property QtObject stemModel: model ? model.modelByType(Inspector.TYPE_STEM) : null
+    readonly property QtObject hookModel: model ? model.modelByType(Inspector.TYPE_HOOK) : null
+    readonly property QtObject beamModel: model ? model.modelByType(Inspector.TYPE_BEAM) : null
+
+    InspectorTabBar {
+        id: tabBar
+
+        currentIndex: root.model ? indexByType(root.model.defaultSubModelType) : 0
+
+        function indexByType(modelType) {
+            switch (modelType) {
+            case Inspector.TYPE_NOTE: return 0
+            case Inspector.TYPE_NOTEHEAD: return 0
+            case Inspector.TYPE_STEM: return 1
+            case Inspector.TYPE_HOOK: return 1
+            case Inspector.TYPE_BEAM: return 2
+            }
+
+            return 0
+        }
+
+        InspectorTabButton {
+            text: root.headModel ? root.headModel.title : ""
+
+            navigation.name: "HeadTab"
+            navigation.panel: root.navigationPanel
+            navigation.row: root.navigationRowStart
+        }
+
+        InspectorTabButton {
+            text: root.stemModel ? root.stemModel.title : ""
+
+            navigation.name: "StemTab"
+            navigation.panel: root.navigationPanel
+            navigation.row: root.navigationRowStart + 1
+        }
+
+        InspectorTabButton {
+            text: root.beamModel ? root.beamModel.title : ""
+
+            navigation.name: "BeamTab"
+            navigation.panel: root.navigationPanel
+            navigation.row: root.navigationRowStart + 2
+        }
+    }
+
+    StackLayout {
+        width: parent.width
+        currentIndex: tabBar.currentIndex
+
+        height: itemAt(currentIndex).implicitHeight
+
+        HeadSettings {
+            height: implicitHeight
+
+            model: root.headModel
+
+            navigationPanel: root.navigationPanel
+            navigationRowStart: root.navigationRowStart + 1000
+        }
+
+        StemSettings {
+            height: implicitHeight
+
+            stemModel: root.stemModel
+            hookModel: root.hookModel
+            beamModel: root.beamModel
+
+            navigationPanel: root.navigationPanel
+            navigationRowStart: root.navigationRowStart + 2000
+        }
+
+        BeamSettings {
+            height: implicitHeight
+
+            model: root.beamModel
+
+            navigationPanel: root.navigationPanel
+            navigationRowStart: root.navigationRowStart + 3000
+        }
     }
 }
-

@@ -24,8 +24,10 @@
  File handling: loading and saving.
  */
 
-#include "xml.h"
-#include "element.h"
+#include "style/style.h"
+#include "rw/xml.h"
+
+#include "engravingitem.h"
 #include "note.h"
 #include "chord.h"
 #include "rest.h"
@@ -35,7 +37,6 @@
 #include "score.h"
 #include "page.h"
 #include "dynamic.h"
-#include "style.h"
 #include "tempo.h"
 #include "select.h"
 #include "staff.h"
@@ -71,6 +72,10 @@
 #include "chordlist.h"
 #include "mscore.h"
 
+#include "masterscore.h"
+
+#include "log.h"
+
 using namespace mu;
 
 namespace Ms {
@@ -93,7 +98,7 @@ static void removeRepeatMarkings(Score* score)
     }
 
     // remove coda/fine labels and jumps
-    QList<Element*> elems;
+    QList<EngravingItem*> elems;
     score->scanElements(&elems, collectElements, false);
     for (auto e : elems) {
         if (e->isMarker() || e->isJump()) {
@@ -127,8 +132,8 @@ static void createExcerpts(MasterScore* cs, QList<Excerpt*> excerpts)
 {
     // borrowed from musescore.cpp endsWith(".pdf")
     for (Excerpt* e: excerpts) {
-        Score* nscore = new Score(e->oscore());
-        e->setPartScore(nscore);
+        Score* nscore = e->masterScore()->createScore();
+        e->setExcerptScore(nscore);
         nscore->style().set(Sid::createMultiMeasureRests, true);
         cs->startCmd();
         cs->undo(new AddExcerpt(e));
@@ -136,8 +141,8 @@ static void createExcerpts(MasterScore* cs, QList<Excerpt*> excerpts)
 
         // borrowed from excerptsdialog.cpp
         // a new excerpt is created in AddExcerpt, make sure the parts are filed
-        for (Excerpt* ee : e->oscore()->excerpts()) {
-            if (ee->partScore() == nscore && ee != e) {
+        for (Excerpt* ee : e->masterScore()->excerpts()) {
+            if (ee->excerptScore() == nscore && ee != e) {
                 ee->parts().clear();
                 ee->parts().append(e->parts());
             }
@@ -159,8 +164,8 @@ MasterScore* MasterScore::unrollRepeats()
     // create a copy of the original score to play with
     MasterScore* score = original->clone();
 
-    // Give it an appropriate name
-    score->setName(original->title() + "_unrolled");
+    // TODO: Give it an appropriate path/filename
+    NOT_IMPLEMENTED;
 
     // figure out repeat structure
     original->setExpandRepeats(true);
@@ -196,7 +201,7 @@ MasterScore* MasterScore::unrollRepeats()
 
     removeRepeatMarkings(score);
 
-    score->fixTicks();
+    score->setUpTempoMap();
 
     score->setLayoutAll();
     score->doLayout();

@@ -27,18 +27,18 @@
  uinterrupted sequences of notes.
  */
 
-// #include <iostream>
-
-#include <QtCore/QStringList>
-#include <QtCore/QtDebug>
-#include <QtCore/QMap>
+#include <QMap>
+#include <QRegularExpression>
+#include <QStringList>
+#include <QtDebug>
 
 #include "lexer.h"
 #include "parser.h"
 #include "writer.h"
+#include "log.h"
 
 // Duration of a whole measure in ticks
-static const int WHOLE_MEASURE_DURATION = 192;
+static constexpr int WHOLE_MEASURE_DURATION = 192;
 
 /**
  Determine if symbol is part of a note sequence
@@ -138,15 +138,14 @@ static void dumpMeasures(QList<Bww::MeasureDescription> const& measures)
                  << "irregular" << measures.at(j).mbf.irregular
         ;
         for (int i = 0; i < measures.at(j).notes.size(); ++i) {
-            qDebug()
-                << measures.at(j).notes.at(i).pitch
-                << measures.at(j).notes.at(i).beam
-                << measures.at(j).notes.at(i).type
-                << measures.at(j).notes.at(i).dots
-                << measures.at(j).notes.at(i).tieStart
-                << measures.at(j).notes.at(i).tieStop
-                << static_cast<int>(measures.at(j).notes.at(i).triplet)
-                << measures.at(j).notes.at(i).grace
+            qDebug() << measures.at(j).notes.at(i).pitch
+                     << measures.at(j).notes.at(i).beam
+                     << measures.at(j).notes.at(i).type
+                     << measures.at(j).notes.at(i).dots
+                     << measures.at(j).notes.at(i).tieStart
+                     << measures.at(j).notes.at(i).tieStop
+                     << static_cast<int>(measures.at(j).notes.at(i).triplet)
+                     << measures.at(j).notes.at(i).grace
             ;
         }
         qDebug() << "mef:"
@@ -570,15 +569,9 @@ void Parser::parse()
    Display error \a s.
    */
 
-void Parser::errorHandler(QString /*s*/)
+void Parser::errorHandler(const QString& err)
 {
-#if 0 // WS
-    std::cerr << "Parse error line "
-              << lex.symLineNumber() + 1
-              << ": "
-              << qPrintable(s)
-              << std::endl;
-#endif
+    LOGE() << err;
 }
 
 /**

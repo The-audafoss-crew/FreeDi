@@ -20,13 +20,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 
 import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
 import MuseScore.Dock 1.0
 
-import MuseScore.UserScores 1.0
+import MuseScore.Project 1.0
 import MuseScore.Cloud 1.0
 import MuseScore.Learn 1.0
 
@@ -41,6 +40,16 @@ DockPage {
     objectName: "Home"
     uri: "musescore://home"
 
+    onSetParamsRequested: function(params) {
+        if (Boolean(params["section"])) {
+            setCurrentCentral(params["section"])
+
+            if (Boolean(params["subSection"])) {
+                subSection = params["subSection"]
+            }
+        }
+    }
+
     onSectionChanged: {
         Qt.callLater(root.setCurrentCentral, section)
     }
@@ -54,11 +63,9 @@ DockPage {
 
         switch (name) {
         case "scores": root.central = scoresComp; break
-        case "add-ons": root.central = addonsComp; break
+        case "plugins": root.central = pluginsComp; break
         case "audio": root.central = audioComp; break
-        case "feautured": root.central = feauturedComp; break
         case "learn": root.central = learnComp; break
-        case "support": root.central = supportComp; break
         case "account": root.central = accountComp; break
         }
     }
@@ -67,15 +74,16 @@ DockPage {
         DockPanel {
             objectName: "homeMenu"
 
+            width: maximumWidth
             minimumWidth: 76
-            maximumWidth: 292
+            maximumWidth: 280
 
-            allowedAreas: Qt.NoDockWidgetArea
+            persistent: true
 
             HomeMenu {
                 currentPageName: root.section
 
-                onSelected: {
+                onSelected: function(name) {
                     root.setCurrentCentral(name)
                 }
             }
@@ -97,9 +105,9 @@ DockPage {
     }
 
     Component {
-        id: addonsComp
+        id: pluginsComp
 
-        AddonsContent {
+        PluginsPage {
             section: root.subSection
         }
     }
@@ -114,28 +122,10 @@ DockPage {
     }
 
     Component {
-        id: feauturedComp
-
-        StyledTextLabel {
-            anchors.centerIn: parent
-            text: "Feautured"
-        }
-    }
-
-    Component {
         id: learnComp
 
         LearnPage {
             section: root.subSection
-        }
-    }
-
-    Component {
-        id: supportComp
-
-        StyledTextLabel {
-            anchors.centerIn: parent
-            text: "Support"
         }
     }
 }

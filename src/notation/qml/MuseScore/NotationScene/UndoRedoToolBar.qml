@@ -25,12 +25,13 @@ import MuseScore.UiComponents 1.0
 import MuseScore.Ui 1.0
 import MuseScore.NotationScene 1.0
 
-Rectangle {
+Item {
     id: root
 
     property alias navigation: navPanel
 
-    color: ui.theme.backgroundPrimaryColor
+    width: content.width
+    height: content.height
 
     Component.onCompleted: {
         model.load()
@@ -40,6 +41,7 @@ Rectangle {
         id: navPanel
         name: "UndoRedoToolBar"
         enabled: root.enabled && root.visible
+        accessible.name: qsTrc("notation", "Undo Redo toolbar")
     }
 
     UndoRedoModel {
@@ -47,21 +49,34 @@ Rectangle {
     }
 
     Row {
-        anchors.centerIn: parent
+        id: content
 
+        readonly property int padding: 6
+
+        //! NOTE padding - 1 to compensate for the dock separator width.
+        //! The separator is hidden, but the space for it is still allocated.
+        //! That should be solved in KDDW.
+        width: padding - 1 + childrenRect.width + padding
         height: childrenRect.height
-        spacing: 2
+        x: padding - 1
+
+        spacing: 0
 
         FlatButton {
-            icon: model.undoItem.icon
+            width: 30
+            height: width
+
+            property var item: Boolean(model) ? model.undoItem : null
+
+            icon: Boolean(item) ? item.icon : IconCode.NONE
             iconFont: ui.theme.toolbarIconsFont
 
-            toolTipTitle: model.undoItem.title
-            toolTipDescription: model.undoItem.description
-            toolTipShortcut: model.undoItem.shortcut
+            toolTipTitle: Boolean(item) ? item.title : ""
+            toolTipDescription: Boolean(item) ? item.description : ""
+            toolTipShortcut: Boolean(item) ? item.shortcuts : ""
 
-            enabled: model.undoItem.enabled
-            normalStateColor: "transparent"
+            enabled: Boolean(item) ? item.enabled : false
+            transparent: true
 
             navigation.panel: navPanel
             navigation.order: 1
@@ -72,15 +87,20 @@ Rectangle {
         }
 
         FlatButton {
-            icon: model.redoItem.icon
+            width: 30
+            height: width
+
+            property var item: Boolean(model) ? model.redoItem : null
+
+            icon: Boolean(item) ? item.icon : IconCode.NONE
             iconFont: ui.theme.toolbarIconsFont
 
-            toolTipTitle: model.redoItem.title
-            toolTipDescription: model.redoItem.description
-            toolTipShortcut: model.redoItem.shortcut
+            toolTipTitle: Boolean(item) ? item.title : ""
+            toolTipDescription: Boolean(item) ? item.description : ""
+            toolTipShortcut: Boolean(item) ? item.shortcuts : ""
 
-            enabled: model.redoItem.enabled
-            normalStateColor: "transparent"
+            enabled: Boolean(item) ? item.enabled : false
+            transparent: true
 
             navigation.panel: navPanel
             navigation.order: 2

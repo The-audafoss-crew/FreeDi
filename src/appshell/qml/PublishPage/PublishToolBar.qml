@@ -30,6 +30,9 @@ Rectangle {
 
     property alias navigation: navPanel
 
+    width: view.width
+    height: view.height
+
     color: ui.theme.backgroundPrimaryColor
 
     NavigationPanel {
@@ -47,9 +50,7 @@ Rectangle {
     }
 
     ListView {
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.left: parent.left
-        anchors.leftMargin: 4
+        id: view
 
         height: contentItem.childrenRect.height
         width: contentItem.childrenRect.width
@@ -62,15 +63,17 @@ Rectangle {
         model: toolBarModel
 
         delegate: FlatButton {
-            text: model.title
-            icon: model.icon
-            //enabled: model.enabled
-            toolTipTitle: model.title
-            toolTipDescription: model.description
-            toolTipShortcut: model.shortcut
+            property var item: Boolean(model) ? model.itemRole : null
+
+            text: Boolean(item) ? item.title : ""
+            icon: Boolean(item) ? item.icon : IconCode.NONE
+            //enabled: Boolean(item) ? item.enabled : false
+            toolTipTitle: Boolean(item) ? item.title : ""
+            toolTipDescription: Boolean(item) ? item.description : ""
+            toolTipShortcut: Boolean(item) ? item.shortcuts : ""
 
             orientation: Qt.Horizontal
-            normalStateColor: "transparent"
+            transparent: true
 
             navigation.panel: navPanel
             navigation.order: model.index
@@ -79,7 +82,7 @@ Rectangle {
             height: 36
 
             onClicked: {
-                toolBarModel.handleAction(model.code)
+                toolBarModel.handleMenuItem(item.id)
             }
         }
     }

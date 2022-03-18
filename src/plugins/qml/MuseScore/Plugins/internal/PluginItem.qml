@@ -19,9 +19,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import QtQuick 2.7
+import QtQuick 2.15
 import QtGraphicalEffects 1.0
 
+import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
 
 Item {
@@ -33,40 +34,61 @@ Item {
 
     signal clicked()
 
-    Image {
-        id: thumbnail
+    property NavigationControl navigation: NavigationControl {
+        accessible.role: MUAccessible.ListItem
+        accessible.name: root.name
+        enabled: root.enabled && root.visible
 
-        anchors.top: parent.top
-
-        width: parent.width
-        height: 142
-
-        fillMode: Image.PreserveAspectCrop
-
-        layer.enabled: true
-        layer.effect: OpacityMask {
-            maskSource: Rectangle {
-                width: thumbnail.width
-                height: thumbnail.height
-                radius: 10
+        onActiveChanged: function(active) {
+            if (active) {
+                root.forceActiveFocus()
             }
         }
+
+        onTriggered: root.clicked()
     }
 
     Rectangle {
-        anchors.fill: thumbnail
+        id: thumbnailRect
+
+        anchors.top: parent.top
+        width: parent.width
+        height: 144
 
         color: "transparent"
         radius: 10
 
         border.color: ui.theme.fontPrimaryColor
         border.width: root.selected ? 2 : 0
+
+        NavigationFocusBorder {
+            navigationCtrl: root.navigation
+            drawOutsideParent: false
+        }
+
+        Image {
+            id: thumbnail
+
+            anchors.fill: parent
+            anchors.margins: 4 //! NOTE: it is necessary to simplify understanding of which element the user is on when navigating
+
+            fillMode: Image.PreserveAspectCrop
+
+            layer.enabled: true
+            layer.effect: OpacityMask {
+                maskSource: Rectangle {
+                    width: thumbnail.width
+                    height: thumbnail.height
+                    radius: 10
+                }
+            }
+        }
     }
 
     StyledTextLabel {
         id: nameLabel
 
-        anchors.top: thumbnail.bottom
+        anchors.top: thumbnailRect.bottom
         anchors.topMargin: 16
         anchors.horizontalCenter: parent.horizontalCenter
     }
@@ -77,7 +99,7 @@ Item {
             when: mouseArea.containsMouse && !mouseArea.pressed
 
             PropertyChanges {
-                target: root
+                target: thumbnail
                 opacity: 0.7
             }
         },
@@ -87,7 +109,7 @@ Item {
             when: mouseArea.pressed
 
             PropertyChanges {
-                target: root
+                target: thumbnail
                 opacity: 0.5
             }
         }

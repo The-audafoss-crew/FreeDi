@@ -23,14 +23,16 @@
 
 #include <QFont>
 
-#include "libmscore/textbase.h"
-
-#include "log.h"
-#include "translation.h"
-#include "dataformatter.h"
+#include "types/commontypes.h"
 #include "types/texttypes.h"
 
+#include "libmscore/textbase.h"
+
+#include "translation.h"
+#include "log.h"
+
 using namespace mu::inspector;
+using namespace mu::engraving;
 
 TextSettingsModel::TextSettingsModel(QObject* parent, IElementRepositoryService* repository)
     : AbstractInspectorModel(parent, repository)
@@ -40,6 +42,7 @@ TextSettingsModel::TextSettingsModel(QObject* parent, IElementRepositoryService*
     createProperties();
 
     isTextEditingChanged().onNotify(this, [this]() {
+        loadProperties();
         setIsSpecialCharactersInsertionAvailable(isTextEditingStarted());
     });
 }
@@ -49,17 +52,18 @@ void TextSettingsModel::createProperties()
     m_fontFamily = buildPropertyItem(Ms::Pid::FONT_FACE);
     m_fontStyle = buildPropertyItem(Ms::Pid::FONT_STYLE);
     m_fontSize = buildPropertyItem(Ms::Pid::FONT_SIZE);
-    m_horizontalAlignment = buildPropertyItem(Ms::Pid::ALIGN, [this](const int pid, const QVariant& newValue) {
-        onPropertyValueChanged(static_cast<Ms::Pid>(pid), newValue.toInt() | m_verticalAlignment->value().toInt());
+
+    m_horizontalAlignment = buildPropertyItem(Ms::Pid::ALIGN, [this](const Ms::Pid pid, const QVariant& newValue) {
+        onPropertyValueChanged(pid, QVariantList({ newValue.toInt(), m_verticalAlignment->value().toInt() }));
     });
-    m_verticalAlignment = buildPropertyItem(Ms::Pid::ALIGN, [this](const int pid, const QVariant& newValue) {
-        onPropertyValueChanged(static_cast<Ms::Pid>(pid), newValue.toInt() | m_horizontalAlignment->value().toInt());
+    m_verticalAlignment = buildPropertyItem(Ms::Pid::ALIGN, [this](const Ms::Pid pid, const QVariant& newValue) {
+        onPropertyValueChanged(pid, QVariantList({ m_horizontalAlignment->value().toInt(), newValue.toInt() }));
     });
 
     m_isSizeSpatiumDependent = buildPropertyItem(Ms::Pid::SIZE_SPATIUM_DEPENDENT);
 
-    m_frameType = buildPropertyItem(Ms::Pid::FRAME_TYPE, [this](const int pid, const QVariant& newValue) {
-        onPropertyValueChanged(static_cast<Ms::Pid>(pid), newValue);
+    m_frameType = buildPropertyItem(Ms::Pid::FRAME_TYPE, [this](const Ms::Pid pid, const QVariant& newValue) {
+        onPropertyValueChanged(pid, newValue);
 
         updateFramePropertiesAvailability();
     });
@@ -70,7 +74,7 @@ void TextSettingsModel::createProperties()
     m_frameMargin = buildPropertyItem(Ms::Pid::FRAME_PADDING);
     m_frameCornerRadius = buildPropertyItem(Ms::Pid::FRAME_ROUND);
 
-    m_textType = buildPropertyItem(Ms::Pid::SUB_STYLE);
+    m_textType = buildPropertyItem(Ms::Pid::TEXT_STYLE);
     m_textPlacement = buildPropertyItem(Ms::Pid::PLACEMENT);
     m_textScriptAlignment = buildPropertyItem(Ms::Pid::TEXT_SCRIPT_ALIGN);
 }
@@ -84,43 +88,27 @@ void TextSettingsModel::loadProperties()
 {
     loadPropertyItem(m_fontFamily, [](const QVariant& elementPropertyValue) -> QVariant {
         return elementPropertyValue.toString() == Ms::TextBase::UNDEFINED_FONT_FAMILY
-        ? QVariant() : elementPropertyValue.toString();
+               ? QVariant() : elementPropertyValue.toString();
     });
 
     loadPropertyItem(m_fontStyle, [](const QVariant& elementPropertyValue) -> QVariant {
         return elementPropertyValue.toInt() == static_cast<int>(Ms::FontStyle::Undefined)
-        ? QVariant() : elementPropertyValue.toInt();
+               ? QVariant() : elementPropertyValue.toInt();
     });
 
     loadPropertyItem(m_fontSize, [](const QVariant& elementPropertyValue) -> QVariant {
         return elementPropertyValue.toInt() == Ms::TextBase::UNDEFINED_FONT_SIZE
-        ? QVariant() : elementPropertyValue.toInt();
+               ? QVariant() : elementPropertyValue.toInt();
     });
 
     loadPropertyItem(m_horizontalAlignment, [](const QVariant& elementPropertyValue) -> QVariant {
-        Ms::Align alignment = static_cast<Ms::Align>(elementPropertyValue.toInt());
-
-        if (alignment & Ms::Align::RIGHT) {
-            return static_cast<int>(Ms::Align::RIGHT);
-        } else if (alignment & Ms::Align::HCENTER) {
-            return static_cast<int>(Ms::Align::HCENTER);
-        } else {
-            return static_cast<int>(Ms::Align::LEFT);
-        }
+        QVariantList list = elementPropertyValue.toList();
+        return list.size() >= 2 ? list[0] : QVariant();
     });
 
     loadPropertyItem(m_verticalAlignment, [](const QVariant& elementPropertyValue) -> QVariant {
-        Ms::Align alignment = static_cast<Ms::Align>(elementPropertyValue.toInt());
-
-        if (alignment & Ms::Align::BASELINE) {
-            return static_cast<int>(Ms::Align::BASELINE);
-        } else if (alignment & Ms::Align::VCENTER) {
-            return static_cast<int>(Ms::Align::VCENTER);
-        } else if (alignment & Ms::Align::BOTTOM) {
-            return static_cast<int>(Ms::Align::BOTTOM);
-        } else {
-            return static_cast<int>(Ms::Align::TOP);
-        }
+        QVariantList list = elementPropertyValue.toList();
+        return list.size() >= 2 ? list[1] : QVariant();
     });
 
     loadPropertyItem(m_isSizeSpatiumDependent);
@@ -128,10 +116,6 @@ void TextSettingsModel::loadProperties()
     loadPropertyItem(m_frameType);
     loadPropertyItem(m_frameBorderColor);
     loadPropertyItem(m_frameHighlightColor);
-
-    auto formatDoubleFunc = [](const QVariant& elementPropertyValue) -> QVariant {
-        return DataFormatter::formatDouble(elementPropertyValue.toDouble());
-    };
 
     loadPropertyItem(m_frameThickness, formatDoubleFunc);
     loadPropertyItem(m_frameMargin, formatDoubleFunc);
@@ -141,7 +125,7 @@ void TextSettingsModel::loadProperties()
     loadPropertyItem(m_textPlacement);
     loadPropertyItem(m_textScriptAlignment, [](const QVariant& elementPropertyValue) -> QVariant {
         return elementPropertyValue.toInt() == static_cast<int>(Ms::VerticalAlignment::AlignUndefined)
-        ? QVariant() : elementPropertyValue.toInt();
+               ? QVariant() : elementPropertyValue.toInt();
     });
 
     updateFramePropertiesAvailability();
@@ -169,12 +153,12 @@ void TextSettingsModel::resetProperties()
 
 void TextSettingsModel::insertSpecialCharacters()
 {
-    NOT_IMPLEMENTED;
+    dispatcher()->dispatch("show-keys");
 }
 
 void TextSettingsModel::showStaffTextProperties()
 {
-    NOT_IMPLEMENTED;
+    dispatcher()->dispatch("staff-text-properties");
 }
 
 PropertyItem* TextSettingsModel::fontFamily() const

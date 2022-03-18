@@ -26,10 +26,6 @@
 #include "iexcerptnotation.h"
 #include "notation.h"
 
-namespace Ms {
-class Score;
-}
-
 namespace mu::notation {
 class ExcerptNotation : public IExcerptNotation, public Notation, public std::enable_shared_from_this<ExcerptNotation>
 {
@@ -39,21 +35,24 @@ public:
 
     ~ExcerptNotation() override;
 
-    INotationPtr notation() override;
+    bool isCreated() const override;
+    void setIsCreated(bool created);
 
     Ms::Excerpt* excerpt() const;
-    void setExcerpt(Ms::Excerpt* excerpt);
 
-    Meta metaInfo() const override;
-    void setMetaInfo(const Meta& meta) override;
+    QString name() const override;
+    void setName(const QString& name) override;
 
-    INotationPtr clone() const override;
+    INotationPtr notation() override;
+    IExcerptNotationPtr clone() const override;
 
 private:
-    bool isInited() const;
+    bool isEmpty() const;
+    void fillWithDefaultInfo();
 
     Ms::Excerpt* m_excerpt = nullptr;
-    Meta m_metaInfo;
+    bool m_isCreated = false;
+    QString m_name;
 };
 }
 

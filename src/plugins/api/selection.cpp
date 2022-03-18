@@ -68,7 +68,7 @@ bool Selection::checkSelectionIsNotLocked() const
 ///   \since MuseScore 3.5
 //---------------------------------------------------------
 
-bool Selection::select(Element* elWrapper, bool add)
+bool Selection::select(EngravingItem* elWrapper, bool add)
 {
     if (!checkSelectionIsNotLocked()) {
         return false;
@@ -78,12 +78,12 @@ bool Selection::select(Element* elWrapper, bool add)
         return false;
     }
 
-    Ms::Element* e = elWrapper->element();
+    Ms::EngravingItem* e = elWrapper->element();
 
     // Check whether it's safe to select this element:
     // use types list from UndoMacro for now
     if (!Ms::UndoMacro::canRecordSelectedElement(e)) {
-        qWarning("Cannot select element of type %s", e->name());
+        qWarning("Cannot select element of type %s", e->typeName());
         return false;
     }
 
@@ -152,7 +152,7 @@ bool Selection::selectRange(int startTick, int endTick, int startStaff, int endS
 ///   \since MuseScore 3.5
 //---------------------------------------------------------
 
-bool Selection::deselect(Element* elWrapper)
+bool Selection::deselect(EngravingItem* elWrapper)
 {
     if (!checkSelectionIsNotLocked()) {
         return false;

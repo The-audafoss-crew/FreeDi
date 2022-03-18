@@ -22,38 +22,39 @@
 #ifndef MU_NOTATION_INOTATIONPLAYBACK_H
 #define MU_NOTATION_INOTATIONPLAYBACK_H
 
-#include <QRect>
 #include "retval.h"
 #include "midi/miditypes.h"
+#include "audio/audiotypes.h"
+#include "mpe/events.h"
+#include "engraving/types/types.h"
 
+#include "internal/inotationundostack.h"
 #include "notationtypes.h"
 
 namespace mu::notation {
 class INotationPlayback
 {
 public:
-
-    using InstrumentTrackId = std::string;
-
     virtual ~INotationPlayback() = default;
 
-    virtual std::vector<InstrumentTrackId> instrumentTrackIdList() const = 0;
-    virtual midi::MidiData instrumentMidiData(const InstrumentTrackId& id) const = 0;
-    virtual async::Channel<InstrumentTrackId> instrumentTrackRemoved() const = 0;
-    virtual async::Channel<InstrumentTrackId> instrumentTrackAdded() const = 0;
+    virtual void init(INotationUndoStackPtr undoStack) = 0;
 
-    virtual QTime totalPlayTime() const = 0;
+    virtual const engraving::InstrumentTrackId& metronomeTrackId() const = 0;
+    virtual const mpe::PlaybackData& trackPlaybackData(const engraving::InstrumentTrackId& trackId) const = 0;
+    virtual void triggerEventsForItem(const EngravingItem* item) = 0;
 
-    virtual float tickToSec(midi::tick_t tick) const = 0;
+    virtual audio::msecs_t totalPlayTime() const = 0;
+    virtual async::Channel<audio::msecs_t> totalPlayTimeChanged() const = 0;
+
+    virtual float playedTickToSec(midi::tick_t tick) const = 0;
+    virtual midi::tick_t secToPlayedtick(float sec) const = 0;
     virtual midi::tick_t secToTick(float sec) const = 0;
 
-    virtual QRect playbackCursorRectByTick(midi::tick_t tick) const = 0;
+    virtual RectF playbackCursorRectByTick(midi::tick_t tick) const = 0;
 
-    virtual RetVal<midi::tick_t> playPositionTickByElement(const Element* element) const = 0;
+    virtual RetVal<midi::tick_t> playPositionTickByElement(const EngravingItem* element) const = 0;
 
-    virtual Ret playElementMidiData(const Element* element) = 0;
-
-    enum BoundaryTick : midi::tick_t {
+    enum BoundaryTick : midi :: tick_t {
         FirstScoreTick = 0,
         SelectedNoteTick,
         LastScoreTick

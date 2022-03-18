@@ -25,15 +25,13 @@ import QtQuick.Controls 2.15
 import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
 
-Rectangle {
+Item {
     id: root
 
-    width: radioButtonList.contentWidth
-    height: radioButtonList.contentHeight
+    width: radioButtonList.width
+    height: radioButtonList.height
 
-    color: ui.theme.backgroundPrimaryColor
-
-    property alias navigation: keynavSub
+    property alias navigation: navCtrl
 
     property string currentUri: "musescore://home"
     property var items: [
@@ -62,20 +60,22 @@ Rectangle {
     }
 
     NavigationPanel {
-        id: keynavSub
+        id: navCtrl
         name: "MainToolBar"
         enabled: root.enabled && root.visible
-        accessible.name: qsTrc("appshell", "Main tool bar") + " " + keynavSub.directionInfo
+        accessible.name: qsTrc("appshell", "Main tool bar") + " " + navCtrl.directionInfo
     }
 
     RadioButtonGroup {
         id: radioButtonList
-
         spacing: 0
 
         model: root.items
 
-        delegate: GradientTabButton {
+        width: contentItem.childrenRect.width
+        height: contentItem.childrenRect.height
+
+        delegate: PageTabButton {
             id: radioButtonDelegate
 
             ButtonGroup.group: radioButtonList.radioButtonGroup
@@ -84,7 +84,7 @@ Rectangle {
             leftPadding: 12
 
             navigation.name: modelData["title"]
-            navigation.panel: keynavSub
+            navigation.panel: navCtrl
             navigation.order: model.index
 
             checked: modelData["uri"] === root.currentUri

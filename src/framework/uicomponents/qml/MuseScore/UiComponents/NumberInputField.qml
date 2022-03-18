@@ -24,7 +24,7 @@ import QtQuick.Controls 2.15
 
 import MuseScore.Ui 1.0
 
-Item {
+FocusScope {
     id: root
 
     property int minValue: 0
@@ -74,6 +74,10 @@ Item {
 
             return str
         }
+    }
+
+    FocusListener {
+        item: root
     }
 
     onValueChanged: {
@@ -132,10 +136,21 @@ Item {
         selectByMouse: false
 
         color: ui.theme.fontPrimaryColor
-        font: ui.theme.tabFont
+        font: ui.theme.largeBodyFont
 
         validator: IntValidator {
             bottom: root.minValue
+        }
+
+        Keys.onShortcutOverride: function(event) {
+            event.accepted = true
+        }
+
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return
+                    || event.key === Qt.Key_Escape) {
+                textField.focus = false
+            }
         }
     }
 
@@ -148,8 +163,8 @@ Item {
 
         enabled: !textField.readOnly
 
-        onClicked: {
-            textField.forceActiveFocus()
+        onPressed: {
+            root.ensureActiveFocus()
             textField.cursorPosition = textField.text.length
         }
     }

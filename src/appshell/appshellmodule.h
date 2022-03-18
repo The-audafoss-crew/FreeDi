@@ -40,6 +40,7 @@ public:
     void registerUiTypes() override;
 
     void onInit(const framework::IApplication::RunMode& mode) override;
+    void onDeinit() override;
 };
 }
 

@@ -19,50 +19,71 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import QtQuick 2.9
-import QtQuick.Controls 1.5
-import QtQuick.Layouts 1.3
+import QtQuick 2.15
+import QtQuick.Layouts 1.15
+
+import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
+
 import "../../../common"
 
-TabPanel {
+Column {
     id: root
 
-    property QtObject model: undefined
+    property QtObject model: null
 
-    implicitHeight: Math.max(generalTab.visible ? generalTab.implicitHeight : 0,
-                             advancedTab.visible ? advancedTab.implicitHeight : 0) + tabBarHeight + 24
-    width: parent ? parent.width : 0
+    property NavigationPanel navigationPanel: null
+    property int navigationRowStart: 1
 
-    Tab {
-        id: generalTab
+    width: parent.width
+    spacing: 12
 
-        title: qsTrc("inspector", "General")
+    function focusOnFirst() {
+        tabBar.focusOnCurrentTab()
+    }
 
-        FretGeneralSettingsTab {
-            anchors.top: parent.top
-            anchors.topMargin: 24
+    InspectorTabBar {
+        id: tabBar
 
-            width: root.width
+        InspectorTabButton {
+            text: qsTrc("inspector", "General")
 
-            model: root.model
+            navigation.name: "GeneralTab"
+            navigation.panel: root.navigationPanel
+            navigation.row: root.navigationRowStart
+        }
+
+        InspectorTabButton {
+            text: qsTrc("inspector", "Settings")
+
+            navigation.name: "SettingsTab"
+            navigation.panel: root.navigationPanel
+            navigation.row: root.navigationRowStart + 1
         }
     }
 
-    Tab {
-        id: advancedTab
+    StackLayout {
+        width: parent.width
+        currentIndex: tabBar.currentIndex
 
-        title: qsTrc("inspector", "Settings")
+        height: itemAt(currentIndex).implicitHeight
 
-        enabled: root.model ? root.model.areSettingsAvailable : false
-
-        FretAdvancedSettingsTab {
-            anchors.top: parent.top
-            anchors.topMargin: 24
-
-            width: root.width
+        FretGeneralSettingsTab {
+            height: implicitHeight
 
             model: root.model
+
+            navigationPanel: root.navigationPanel
+            navigationRowStart: root.navigationRowStart + 1000
+        }
+
+        FretAdvancedSettingsTab {
+            height: implicitHeight
+
+            model: root.model
+
+            navigationPanel: root.navigationPanel
+            navigationRowStart: root.navigationRowStart + 2000
         }
     }
 }

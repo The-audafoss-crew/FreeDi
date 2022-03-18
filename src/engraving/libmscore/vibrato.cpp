@@ -24,11 +24,11 @@
 #include <cmath>
 
 #include "translation.h"
+#include "style/style.h"
+#include "rw/xml.h"
 
-#include "style.h"
 #include "system.h"
 #include "measure.h"
-#include "xml.h"
 #include "utils.h"
 #include "score.h"
 #include "scorefont.h"
@@ -37,6 +37,7 @@
 #include "staff.h"
 
 using namespace mu;
+using namespace mu::engraving;
 
 namespace Ms {
 //---------------------------------------------------------
@@ -44,16 +45,16 @@ namespace Ms {
 //    must be in sync with Vibrato::Type
 //---------------------------------------------------------
 
-const VibratoTableItem vibratoTable[] = {
+const std::vector<VibratoTableItem> vibratoTable = {
     { Vibrato::Type::GUITAR_VIBRATO,        "guitarVibrato",       QT_TRANSLATE_NOOP("vibratoType", "Guitar vibrato") },
     { Vibrato::Type::GUITAR_VIBRATO_WIDE,   "guitarVibratoWide",   QT_TRANSLATE_NOOP("vibratoType", "Guitar vibrato wide") },
     { Vibrato::Type::VIBRATO_SAWTOOTH,      "vibratoSawtooth",     QT_TRANSLATE_NOOP("vibratoType", "Vibrato sawtooth") },
     { Vibrato::Type::VIBRATO_SAWTOOTH_WIDE, "vibratoSawtoothWide", QT_TRANSLATE_NOOP("vibratoType", "Tremolo sawtooth wide") }
 };
 
-int vibratoTableSize()
+VibratoSegment::VibratoSegment(Vibrato* sp, System* parent)
+    : LineSegment(ElementType::VIBRATO_SEGMENT, sp, parent, ElementFlag::MOVABLE | ElementFlag::ON_STAFF)
 {
-    return sizeof(vibratoTable) / sizeof(VibratoTableItem);
 }
 
 //---------------------------------------------------------
@@ -164,7 +165,7 @@ Shape VibratoSegment::shape() const
 //   propertyDelegate
 //---------------------------------------------------------
 
-Element* VibratoSegment::propertyDelegate(Pid pid)
+EngravingItem* VibratoSegment::propertyDelegate(Pid pid)
 {
     if (pid == Pid::VIBRATO_TYPE || pid == Pid::PLACEMENT || pid == Pid::PLAY) {
         return spanner();
@@ -185,8 +186,8 @@ static const ElementStyle vibratoStyle {
 //   Vibrato
 //---------------------------------------------------------
 
-Vibrato::Vibrato(Score* s)
-    : SLine(s)
+Vibrato::Vibrato(EngravingItem* parent)
+    : SLine(ElementType::VIBRATO, parent)
 {
     initElementStyle(&vibratoStyle);
     _vibratoType = Type::GUITAR_VIBRATO;
@@ -204,7 +205,7 @@ Vibrato::~Vibrato()
 void Vibrato::layout()
 {
     SLine::layout();
-    if (score() == gscore) {
+    if (score()->isPaletteScore()) {
         return;
     }
     if (spannerSegments().empty()) {
@@ -222,9 +223,9 @@ static const ElementStyle vibratoSegmentStyle {
 //   createLineSegment
 //---------------------------------------------------------
 
-LineSegment* Vibrato::createLineSegment()
+LineSegment* Vibrato::createLineSegment(System* parent)
 {
-    VibratoSegment* seg = new VibratoSegment(this, score());
+    VibratoSegment* seg = new VibratoSegment(this, parent);
     seg->setTrack(track());
     seg->setColor(color());
     seg->initElementStyle(&vibratoSegmentStyle);
@@ -240,14 +241,14 @@ void Vibrato::write(XmlWriter& xml) const
     if (!xml.canWrite(this)) {
         return;
     }
-    xml.stag(this);
+    xml.startObject(this);
     xml.tag("subtype", vibratoTypeName());
     writeProperty(xml, Pid::PLAY);
     for (const StyledProperty& spp : *styledProperties()) {
         writeProperty(xml, spp.pid);
     }
     SLine::writeProperties(xml);
-    xml.etag();
+    xml.endObject();
 }
 
 //---------------------------------------------------------
@@ -342,7 +343,7 @@ Sid Vibrato::getPropertyStyle(Pid pid) const
 //   getProperty
 //---------------------------------------------------------
 
-QVariant Vibrato::getProperty(Pid propertyId) const
+PropertyValue Vibrato::getProperty(Pid propertyId) const
 {
     switch (propertyId) {
     case Pid::VIBRATO_TYPE:
@@ -359,7 +360,7 @@ QVariant Vibrato::getProperty(Pid propertyId) const
 //   setProperty
 //---------------------------------------------------------
 
-bool Vibrato::setProperty(Pid propertyId, const QVariant& val)
+bool Vibrato::setProperty(Pid propertyId, const PropertyValue& val)
 {
     switch (propertyId) {
     case Pid::VIBRATO_TYPE:
@@ -369,7 +370,7 @@ bool Vibrato::setProperty(Pid propertyId, const QVariant& val)
         setPlayArticulation(val.toBool());
         break;
     case Pid::COLOR:
-        setColor(val.value<QColor>());
+        setColor(val.value<mu::draw::Color>());
         [[fallthrough]];
     default:
         if (!SLine::setProperty(propertyId, val)) {
@@ -385,7 +386,7 @@ bool Vibrato::setProperty(Pid propertyId, const QVariant& val)
 //   propertyDefault
 //---------------------------------------------------------
 
-QVariant Vibrato::propertyDefault(Pid propertyId) const
+PropertyValue Vibrato::propertyDefault(Pid propertyId) const
 {
     switch (propertyId) {
     case Pid::VIBRATO_TYPE:
@@ -426,6 +427,6 @@ void Vibrato::undoSetVibratoType(Type val)
 
 QString Vibrato::accessibleInfo() const
 {
-    return QString("%1: %2").arg(Element::accessibleInfo(), vibratoTypeUserName());
+    return QString("%1: %2").arg(EngravingItem::accessibleInfo(), vibratoTypeUserName());
 }
 }

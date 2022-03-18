@@ -32,10 +32,8 @@ import "internal"
 FocusScope {
     id: root
 
-    property var color: ui.theme.backgroundSecondaryColor
+    property alias color: background.color
     property string section: ""
-
-    signal requestActiveFocus()
 
     QtObject {
         id: prv
@@ -48,9 +46,9 @@ FocusScope {
         name: "Learn"
         enabled: root.visible
         order: 3
-        onActiveChanged: {
+        onActiveChanged: function(active) {
             if (active) {
-                root.requestActiveFocus()
+                root.forceActiveFocus()
             }
         }
     }
@@ -60,7 +58,7 @@ FocusScope {
             return
         }
 
-        bar.selectPage(root.section)
+        tabBar.selectPage(root.section)
     }
 
     LearnPageModel {
@@ -72,12 +70,14 @@ FocusScope {
     }
 
     Rectangle {
+        id: background
         anchors.fill: parent
-        color: root.color
+        color: ui.theme.backgroundSecondaryColor
     }
 
     RowLayout {
         id: topLayout
+
         anchors.top: parent.top
         anchors.topMargin: prv.sideMargin
         anchors.left: parent.left
@@ -90,6 +90,7 @@ FocusScope {
         NavigationPanel {
             id: navSearchPanel
             name: "LearnSearch"
+            enabled: topLayout.enabled && topLayout.visible
             section: navSec
             order: 1
             accessible.name: qsTrc("learn", "Learn")
@@ -97,15 +98,11 @@ FocusScope {
 
         StyledTextLabel {
             id: learnLabel
+            Layout.fillWidth: true
 
             text: qsTrc("learn", "Learn")
             font: ui.theme.titleBoldFont
             horizontalAlignment: Text.AlignLeft
-        }
-
-        Item {
-            Layout.preferredWidth: topLayout.width - learnLabel.width - searchField.width - topLayout.spacing * 2
-            Layout.fillHeight: true
         }
 
         SearchField {
@@ -124,18 +121,15 @@ FocusScope {
         }
     }
 
-    TabBar {
-        id: bar
+    StyledTabBar {
+        id: tabBar
 
         anchors.top: topLayout.bottom
-        anchors.topMargin: 36
+        anchors.topMargin: prv.sideMargin
         anchors.left: parent.left
-        anchors.leftMargin: prv.sideMargin - itemSideMargin
-
-        contentHeight: 32
-        spacing: 0
-
-        readonly property int itemSideMargin: 22
+        anchors.leftMargin: prv.sideMargin
+        anchors.right: parent.right
+        anchors.rightMargin: prv.sideMargin
 
         function pageIndex(pageName) {
             switch (pageName) {
@@ -155,62 +149,51 @@ FocusScope {
             id: navTabPanel
             name: "LearnTabs"
             section: navSec
+            direction: NavigationPanel.Horizontal
             order: 2
             accessible.name: qsTrc("learn", "Learn tabs")
+            enabled: tabBar.enabled && tabBar.visible
 
-            onNavigationEvent: {
+            onNavigationEvent: function(event) {
                 if (event.type === NavigationEvent.AboutActive) {
-                    event.setData("controlName", bar.currentItem.navigation.name)
+                    event.setData("controlName", tabBar.currentItem.navigation.name)
                 }
             }
         }
 
         StyledTabButton {
-            text: qsTrc("learn", "Get Started")
-            sideMargin: bar.itemSideMargin
-            isCurrent: bar.currentIndex === 0
-            backgroundColor: root.color
+            text: qsTrc("learn", "Get started")
 
-            navigation.name: "Get Started"
+            navigation.name: "Get started"
             navigation.panel: navTabPanel
-            navigation.order: 1
-            onNavigationTriggered: bar.currentIndex = 0
+            navigation.column: 1
         }
 
         StyledTabButton {
             text: qsTrc("learn", "Advanced")
-            sideMargin: bar.itemSideMargin
-            isCurrent: bar.currentIndex === 1
-            backgroundColor: root.color
 
             navigation.name: "Advanced"
             navigation.panel: navTabPanel
-            navigation.order: 2
-            onNavigationTriggered: bar.currentIndex = 1
+            navigation.column: 2
         }
 
         StyledTabButton {
             text: qsTrc("learn", "Classes")
-            sideMargin: bar.itemSideMargin
-            isCurrent: bar.currentIndex === 2
-            backgroundColor: root.color
 
             navigation.name: "Classes"
             navigation.panel: navTabPanel
-            navigation.order: 3
-            onNavigationTriggered: bar.currentIndex = 2
+            navigation.column: 3
         }
     }
 
     StackLayout {
-        anchors.top: bar.bottom
-        anchors.topMargin: 24
+        anchors.top: tabBar.bottom
+        anchors.topMargin: 28
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
 
-        currentIndex: bar.currentIndex
+        currentIndex: tabBar.currentIndex
 
         Playlist {
             id: getStartedComp
@@ -220,16 +203,13 @@ FocusScope {
             navigation.section: navSec
             navigation.order: 3
             navigation.name: "LearnGetStarted"
-            navigation.accessible.name: qsTrc("learn", "Get Started") + navigation.directionInfo
+            navigation.accessible.name: qsTrc("learn", "Get started") + navigation.directionInfo
 
+            backgroundColor: root.color
             sideMargin: prv.sideMargin
 
-            onRequestOpenVideo: {
+            onRequestOpenVideo: function(videoId) {
                 pageModel.openVideo(videoId)
-            }
-
-            onRequestActiveFocus: {
-                root.requestActiveFocus()
             }
         }
 
@@ -243,14 +223,11 @@ FocusScope {
             navigation.name: "LearnAdvanced"
             navigation.accessible.name: qsTrc("learn", "Advanced") + navigation.directionInfo
 
+            backgroundColor: root.color
             sideMargin: prv.sideMargin
 
-            onRequestOpenVideo: {
+            onRequestOpenVideo: function(videoId) {
                 pageModel.openVideo(videoId)
-            }
-
-            onRequestActiveFocus: {
-                root.requestActiveFocus()
             }
         }
 
@@ -267,7 +244,7 @@ FocusScope {
             authorOrganizationName: author.organizationName
 
             navigation.section: navSec
-            navigation.order: 4
+            navigation.order: 5
             navigation.name: "LearnClasses"
             navigation.accessible.name: qsTrc("learn", "Classes") + navigation.directionInfo
 

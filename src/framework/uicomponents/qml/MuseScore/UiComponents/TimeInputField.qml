@@ -30,7 +30,7 @@ Row {
     property date maxTime
     property alias maxMillisecondsNumber: millisecondsField.maxValue
 
-    property var font: ui.theme.tabFont
+    property var font: ui.theme.largeBodyFont
 
     signal timeEdited(var newTime)
 
@@ -46,7 +46,7 @@ Row {
 
         font: root.font
 
-        onValueEdited: {
+        onValueEdited: function(newValue) {
             var newTime = root.time
             newTime.setHours(newValue)
             root.timeEdited(newTime)
@@ -68,7 +68,7 @@ Row {
         displayedNumberLength: 2
         font: root.font
 
-        onValueEdited: {
+        onValueEdited: function(newValue) {
             var newTime = root.time
             newTime.setMinutes(newValue)
             root.timeEdited(newTime)
@@ -90,7 +90,7 @@ Row {
         displayedNumberLength: 2
         font: root.font
 
-        onValueEdited: {
+        onValueEdited: function(newValue) {
             var newTime = root.time
             newTime.setSeconds(newValue)
             root.timeEdited(newTime)
@@ -114,7 +114,7 @@ Row {
 
         font: root.font
 
-        onValueEdited: {
+        onValueEdited: function(newValue) {
             var newTime = root.time
             newTime.setMilliseconds(newValue * precision)
             root.timeEdited(newTime)

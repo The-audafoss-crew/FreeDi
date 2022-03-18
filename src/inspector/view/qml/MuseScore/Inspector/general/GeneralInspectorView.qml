@@ -20,8 +20,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import QtQuick 2.15
-import QtQuick.Layouts 1.0
-import QtQuick.Controls 2.0
+import QtQuick.Layouts 1.15
 
 import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
@@ -44,8 +43,6 @@ InspectorSectionView {
         spacing: 12
 
         GridLayout {
-            id: grid
-
             width: parent.width
 
             columns: 2
@@ -53,77 +50,70 @@ InspectorSectionView {
             rowSpacing: 12
             columnSpacing: 4
 
-            VisibilityBox {
+            CheckBoxPropertyView {
                 Layout.fillWidth: true
                 Layout.maximumWidth: parent.width / 2
 
-                navigation.panel: root.navigationPanel
                 navigation.name: "Visible"
+                navigation.panel: root.navigationPanel
                 navigation.row: root.navigationRow(1)
 
                 text: qsTrc("inspector", "Visible")
-
-                isVisible: model && !model.isVisible.isUndefined ? model.isVisible.value : false
-
-                onVisibleToggled: { model.isVisible.value = !model.isVisible.value }
+                propertyItem: root.model ? root.model.isVisible : null
+                isIndeterminate: enabled && propertyItem && propertyItem.isUndefined
             }
 
-            VisibilityBox {
+            CheckBoxPropertyView {
                 Layout.fillWidth: true
                 Layout.maximumWidth: parent.width / 2
 
-                navigation.panel: root.navigationPanel
                 navigation.name: "Cue size"
+                navigation.panel: root.navigationPanel
                 navigation.row: root.navigationRow(2)
 
                 text: qsTrc("inspector", "Cue size")
-
-                enabled: model ? model.isSmall.isEnabled : false
-                isVisible: model && !model.isSmall.isUndefined ? model.isSmall.value : false
-
-                onVisibleToggled: { model.isSmall.value = !model.isSmall.value }
+                propertyItem: root.model ? root.model.isSmall : null
+                isIndeterminate: enabled && propertyItem && propertyItem.isUndefined
             }
 
-            VisibilityBox {
+            CheckBoxPropertyView {
                 Layout.fillWidth: true
                 Layout.maximumWidth: parent.width / 2
 
-                navigation.panel: root.navigationPanel
                 navigation.name: "Auto-place"
+                navigation.panel: root.navigationPanel
                 navigation.row: root.navigationRow(3)
 
                 text: qsTrc("inspector", "Auto-place")
-                isVisible: model && !model.isAutoPlaceAllowed.isUndefined ? model.isAutoPlaceAllowed.value : false
-                onVisibleToggled: { model.isAutoPlaceAllowed.value = !model.isAutoPlaceAllowed.value }
+                propertyItem: root.model ? root.model.isAutoPlaceAllowed : null
+                isIndeterminate: enabled && propertyItem && propertyItem.isUndefined
             }
 
-            VisibilityBox {
+            CheckBoxPropertyView {
                 Layout.fillWidth: true
                 Layout.maximumWidth: parent.width / 2
 
-                navigation.panel: root.navigationPanel
                 navigation.name: "Play"
+                navigation.panel: root.navigationPanel
                 navigation.row: root.navigationRow(4)
 
                 text: qsTrc("inspector", "Play")
-
-                enabled: model ? model.isPlayable.isEnabled : false
-                isVisible: model && !model.isPlayable.isUndefined ? model.isPlayable.value : false
-                onVisibleToggled: { model.isPlayable.value = !model.isPlayable.value }
+                propertyItem: root.model ? root.model.isPlayable : null
+                isIndeterminate: enabled && propertyItem && propertyItem.isUndefined
             }
         }
 
-        Row {
-            id: popupButtonsRow
-
+        GridLayout {
             width: parent.width
 
-            spacing: 4
+            columns: 2
+            columnSpacing: 4
 
-            FlatButton {
+            PopupViewButton {
                 id: playbackButton
 
-                width: (parent.width - popupButtonsRow.spacing)/ 2
+                popupAvailableWidth: parent ? parent.width : 0
+                anchorItem: root.anchorItem
 
                 navigation.panel: root.navigationPanel
                 navigation.name: "Playback"
@@ -132,25 +122,28 @@ InspectorSectionView {
                 icon: IconCode.AUDIO
                 text: qsTrc("inspector", "Playback")
 
-                onClicked: {
-                    if (playbackPopup.isOpened) {
-                        playbackPopup.close()
-                    } else {
-                        playbackPopup.open()
-                    }
+                enabled: model && !model.playbackProxyModel.isEmpty
+
+                popupContent: PlaybackSettings {
+                    proxyModel: model ? model.playbackProxyModel : null
+
+                    navigationPanel: playbackButton.popupNavigationPanel
                 }
 
-                PlaybackPopup {
-                    id: playbackPopup
-                    navigationParentControl: playbackButton.navigation
-                    proxyModel: model ? model.playbackProxyModel : null
+                onEnsureContentVisibleRequested: function(invisibleContentHeight) {
+                    root.ensureContentVisibleRequested(invisibleContentHeight)
+                }
+
+                onPopupOpened: {
+                    root.popupOpened(playbackButton.popup)
                 }
             }
 
-            FlatButton {
+            PopupViewButton {
                 id: appearanceButton
 
-                width: (parent.width - popupButtonsRow.spacing)/ 2
+                popupAvailableWidth: parent ? parent.width : 0
+                anchorItem: root.anchorItem
 
                 navigation.panel: root.navigationPanel
                 navigation.name: "Appearance"
@@ -159,18 +152,18 @@ InspectorSectionView {
                 icon: IconCode.POSITION_ARROWS
                 text: qsTrc("inspector", "Appearance")
 
-                onClicked: {
-                    if (appearancePopup.isOpened) {
-                        appearancePopup.close()
-                    } else {
-                        appearancePopup.open()
-                    }
+                popupContent: AppearanceSettings {
+                    model: root.model ? root.model.appearanceSettingsModel : null
+
+                    navigationPanel: appearanceButton.popupNavigationPanel
                 }
 
-                AppearancePopup {
-                    id: appearancePopup
-                    navigationParentControl: appearanceButton.navigation
-                    model: root.model ? root.model.appearanceSettingsModel : null
+                onEnsureContentVisibleRequested: function(invisibleContentHeight) {
+                    root.ensureContentVisibleRequested(invisibleContentHeight)
+                }
+
+                onPopupOpened: {
+                    root.popupOpened(appearanceButton.popup)
                 }
             }
         }

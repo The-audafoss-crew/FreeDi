@@ -81,13 +81,12 @@ void FoldersPreferencesModel::load()
     beginResetModel();
 
     m_folders = {
-        { FolderType::Scores, qtrc("appshell", "Scores"), userScoresConfiguration()->userScoresPath().toQString() },
+        { FolderType::Scores, qtrc("appshell", "Scores"), projectConfiguration()->userProjectsPath().toQString() },
         { FolderType::Styles, qtrc("appshell", "Styles"), notationConfiguration()->userStylesPath().toQString() },
-        { FolderType::Templates, qtrc("appshell", "Templates"), userScoresConfiguration()->userTemplatesPath().toQString() },
+        { FolderType::Templates, qtrc("appshell", "Templates"), projectConfiguration()->userTemplatesPath().toQString() },
         { FolderType::Plugins, qtrc("appshell", "Plugins"), pluginsConfiguration()->userPluginsPath().toQString() },
         { FolderType::SoundFonts, qtrc("appshell", "SoundFonts"), "" }, // todo: need implement
-        { FolderType::Images, qtrc("appshell", "Images"), "" }, // todo: need implement
-        { FolderType::Extensions, qtrc("appshell", "Extensions"), extensionsConfiguration()->userExtensionsPath().toQString() }
+        { FolderType::Images, qtrc("appshell", "Images"), "" } // todo: need implement
     };
 
     endResetModel();
@@ -97,7 +96,7 @@ void FoldersPreferencesModel::load()
 
 void FoldersPreferencesModel::setupConnections()
 {
-    userScoresConfiguration()->userScoresPathChanged().onReceive(this, [this](const io::path& path) {
+    projectConfiguration()->userProjectsPathChanged().onReceive(this, [this](const io::path& path) {
         setPath(FolderType::Scores, path.toQString());
     });
 
@@ -105,16 +104,12 @@ void FoldersPreferencesModel::setupConnections()
         setPath(FolderType::Styles, path.toQString());
     });
 
-    userScoresConfiguration()->userTemplatesPathChanged().onReceive(this, [this](const io::path& path) {
+    projectConfiguration()->userTemplatesPathChanged().onReceive(this, [this](const io::path& path) {
         setPath(FolderType::Templates, path.toQString());
     });
 
     pluginsConfiguration()->userPluginsPathChanged().onReceive(this, [this](const io::path& path) {
         setPath(FolderType::Plugins, path.toQString());
-    });
-
-    extensionsConfiguration()->userExtensionsPathChanged().onReceive(this, [this](const io::path& path) {
-        setPath(FolderType::Extensions, path.toQString());
     });
 }
 
@@ -124,19 +119,16 @@ void FoldersPreferencesModel::savePath(FoldersPreferencesModel::FolderType folde
 
     switch (folderType) {
     case FolderType::Scores:
-        userScoresConfiguration()->setUserScoresPath(folderPath);
+        projectConfiguration()->setUserProjectsPath(folderPath);
         break;
     case FolderType::Styles:
         notationConfiguration()->setUserStylesPath(folderPath);
         break;
     case FolderType::Templates:
-        userScoresConfiguration()->setUserTemplatesPath(folderPath);
+        projectConfiguration()->setUserTemplatesPath(folderPath);
         break;
     case FolderType::Plugins:
         pluginsConfiguration()->setUserPluginsPath(folderPath);
-        break;
-    case FolderType::Extensions:
-        extensionsConfiguration()->setUserExtensionsPath(folderPath);
         break;
     case FolderType::Undefined:
         break;

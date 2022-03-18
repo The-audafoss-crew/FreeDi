@@ -85,16 +85,6 @@ const std::vector<interval_tree::Interval<Spanner*> >& SpannerMap::findOverlappi
 
 void SpannerMap::addSpanner(Spanner* s)
 {
-#if 0
-#ifndef NDEBUG
-    // check if spanner already in list
-    for (auto i = begin(); i != end(); ++i) {
-        if (i->second == s) {
-            qFatal("SpannerMap::addSpanner: %s already in list %p", s->name(), s);
-        }
-    }
-#endif
-#endif
     insert(std::pair<int, Spanner*>(s->tick().ticks(), s));
     dirty = true;
 }
@@ -112,7 +102,7 @@ bool SpannerMap::removeSpanner(Spanner* s)
             return true;
         }
     }
-    qDebug("%s (%p) not found", s->name(), s);
+    qDebug("%s (%p) not found", s->typeName(), s);
     return false;
 }
 
@@ -125,7 +115,7 @@ void SpannerMap::dump() const
 {
     qDebug("SpannerMap::dump");
     for (auto i = begin(); i != end(); ++i) {
-        qDebug("   %5d: %s %p", i->first, i->second->name(), i->second);
+        qDebug("   %5d: %s %p", i->first, i->second->typeName(), i->second);
     }
 }
 

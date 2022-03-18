@@ -28,7 +28,7 @@ import MuseScore.Palette 1.0
 StyledDialogView {
     id: root
 
-    title: qsTrc("palette", "Palette Properties")
+    title: qsTrc("palette", "Palette properties")
 
     contentWidth: 280
     contentHeight: 370
@@ -56,7 +56,7 @@ StyledDialogView {
         TextInputField {
             currentText: propertiesModel.name
 
-            onCurrentTextEdited: {
+            onCurrentTextEdited: function(newTextValue) {
                 propertiesModel.name = newTextValue
             }
         }
@@ -110,7 +110,7 @@ StyledDialogView {
                         measureUnitsSymbol: Boolean(modelData["measureUnit"]) ? modelData["measureUnit"] : ""
                         step: modelData["incrementStep"]
 
-                        onValueEdited: {
+                        onValueEdited: function(newValue) {
                             repeater.setValue(model.index, newValue)
                         }
                     }

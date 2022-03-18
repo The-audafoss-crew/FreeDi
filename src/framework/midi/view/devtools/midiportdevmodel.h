@@ -38,32 +38,28 @@ class MidiPortDevModel : public QObject, public async::Asyncable
     INJECT(midi, IMidiOutPort, midiOutPort)
     INJECT(midi, IMidiInPort, midiInPort)
 
-    Q_PROPERTY(bool isInputRunning READ isInputRunning NOTIFY isInputRunningChanged)
+    Q_PROPERTY(QVariantList outputDevices READ outputDevices NOTIFY outputDevicesChanged)
+    Q_PROPERTY(QVariantList inputDevices READ inputDevices NOTIFY inputDevicesChanged)
+    Q_PROPERTY(QVariantList inputEvents READ inputEvents NOTIFY inputEventsChanged)
 
 public:
     explicit MidiPortDevModel(QObject* parent = nullptr);
 
-    bool isInputRunning() const;
-
-    Q_INVOKABLE QVariantList outputDevices() const;
+    QVariantList outputDevices() const;
     Q_INVOKABLE void outputDeviceAction(const QString& deviceID, const QString& action);
 
-    Q_INVOKABLE QVariantList inputDevices() const;
+    QVariantList inputDevices() const;
     Q_INVOKABLE void inputDeviceAction(const QString& deviceID, const QString& action);
 
-    Q_INVOKABLE void stopInput();
-    Q_INVOKABLE void runInput();
-    Q_INVOKABLE QVariantList inputEvents() const;
+    QVariantList inputEvents() const;
     Q_INVOKABLE void generateMIDI20();
 
 signals:
     void outputDevicesChanged();
     void inputDevicesChanged();
     void inputEventsChanged();
-    void isInputRunningChanged();
 
 private:
-
     QMap<QString, QString> m_connectionErrors;
     QVariantList m_inputEvents;
 };

@@ -37,6 +37,8 @@ class UiTheme : public QProxyStyle, public async::Asyncable
 
     INJECT(ui, IUiConfiguration, configuration)
 
+    Q_PROPERTY(bool isLight READ isLight NOTIFY themeChanged)
+
     Q_PROPERTY(QColor backgroundPrimaryColor READ backgroundPrimaryColor NOTIFY themeChanged)
     Q_PROPERTY(QColor backgroundSecondaryColor READ backgroundSecondaryColor NOTIFY themeChanged)
     Q_PROPERTY(QColor popupBackgroundColor READ popupBackgroundColor NOTIFY themeChanged)
@@ -48,6 +50,9 @@ class UiTheme : public QProxyStyle, public async::Asyncable
     Q_PROPERTY(QColor fontSecondaryColor READ fontSecondaryColor NOTIFY themeChanged)
     Q_PROPERTY(QColor linkColor READ linkColor NOTIFY themeChanged)
     Q_PROPERTY(QColor focusColor READ focusColor NOTIFY themeChanged)
+
+    Q_PROPERTY(qreal borderWidth READ borderWidth NOTIFY themeChanged)
+    Q_PROPERTY(qreal navCtrlBorderWidth READ navCtrlBorderWidth NOTIFY themeChanged)
 
     Q_PROPERTY(qreal accentOpacityNormal READ accentOpacityNormal NOTIFY themeChanged)
     Q_PROPERTY(qreal accentOpacityHit READ accentOpacityHit NOTIFY themeChanged)
@@ -74,11 +79,17 @@ class UiTheme : public QProxyStyle, public async::Asyncable
 
     Q_PROPERTY(QFont musicalFont READ musicalFont NOTIFY themeChanged)
 
+    Q_PROPERTY(QFont defaultFont READ defaultFont CONSTANT)
+
+    Q_PROPERTY(int flickableMaxVelocity READ flickableMaxVelocity CONSTANT)
+
 public:
     UiTheme();
 
     void init();
     void update();
+
+    bool isLight() const;
 
     QColor backgroundPrimaryColor() const;
     QColor backgroundSecondaryColor() const;
@@ -106,6 +117,10 @@ public:
     QFont toolbarIconsFont() const;
     QFont musicalFont() const;
 
+    QFont defaultFont() const;
+
+    qreal borderWidth() const;
+    qreal navCtrlBorderWidth() const;
     qreal accentOpacityNormal() const;
     qreal accentOpacityHover() const;
     qreal accentOpacityHit() const;
@@ -116,10 +131,14 @@ public:
 
     qreal itemOpacityDisabled() const;
 
+    int flickableMaxVelocity() const;
+
     void polish(QWidget* widget) override;
     void unpolish(QWidget* widget) override;
 
     void drawPrimitive(PrimitiveElement element, const QStyleOption* option, QPainter* painter, const QWidget* widget) const override;
+    void drawComplexControl(ComplexControl control, const QStyleOptionComplex* option, QPainter* painter,
+                            const QWidget* widget = nullptr) const override;
     QRect subControlRect(QStyle::ComplexControl control, const QStyleOptionComplex* option, QStyle::SubControl subControl,
                          const QWidget* widget = nullptr) const override;
     int pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const override;
@@ -132,6 +151,13 @@ signals:
     void themeChanged();
 
 private:
+    struct StyleState {
+        bool enabled = false;
+        bool hovered = false;
+        bool pressed = false;
+        bool focused = false;
+    };
+
     void initThemeValues();
 
     void initUiFonts();
@@ -146,13 +172,14 @@ private:
 
     void notifyAboutThemeChanged();
 
-    void drawButtonBackground(QPainter* painter, const QRect& rect, bool enabled, bool hovered, bool pressed, bool accentButton,
-                              bool flat) const;
-    void drawCheckboxIndicator(QPainter* painter, const QRect& rect, bool enabled, bool hovered, bool pressed, bool checked,
-                               bool indeterminate, bool inMenu) const;
-    void drawRadioButtonIndicator(QPainter* painter, const QRect& rect, bool enabled, bool hovered, bool pressed, bool selected) const;
-    void drawIndicatorIcon(QPainter* painter, const QRect& rect, bool enabled, QStyle::PrimitiveElement element) const;
-    void drawListViewItemBackground(QPainter* painter, const QRect& rect, bool enabled, bool hovered, bool pressed, bool selected) const;
+    void drawButtonBackground(QPainter* painter, const QRect& rect, const StyleState& styleState, bool accentButton, bool flat,
+                              const QColor& defaultBackground) const;
+    void drawCheckboxIndicator(QPainter* painter, const QRect& rect, const StyleState& styleState, bool checked, bool indeterminate,
+                               bool inMenu) const;
+    void drawRadioButtonIndicator(QPainter* painter, const QRect& rect, const StyleState& styleState, bool selected) const;
+    void drawLineEditBackground(QPainter* painter, const QRect& rect, const StyleState& styleState, bool editing) const;
+    void drawIndicatorIcon(QPainter* painter, const QRect& rect, const StyleState& styleState, QStyle::PrimitiveElement element) const;
+    void drawViewItemBackground(QPainter* painter, const QRect& rect, const StyleState& styleState, bool selected) const;
     void drawToolbarGrip(QPainter* painter, const QRect& rect, bool horizontal) const;
 
     QFont m_bodyFont;
@@ -167,6 +194,7 @@ private:
     QFont m_iconsFont;
     QFont m_toolbarIconsFont;
     QFont m_musicalFont;
+    QFont m_defaultFont;
 
     QColor m_backgroundPrimaryColor;
     QColor m_backgroundSecondaryColor;
@@ -180,13 +208,15 @@ private:
     QColor m_linkColor;
     QColor m_focusColor;
 
-    qreal m_accentOpacityNormal;
-    qreal m_accentOpacityHover;
-    qreal m_accentOpacityHit;
-    qreal m_buttonOpacityNormal;
-    qreal m_buttonOpacityHover;
-    qreal m_buttonOpacityHit;
-    qreal m_itemOpacityDisabled;
+    qreal m_borderWidth = 0;
+    qreal m_navCtrlBorderWidth = 0;
+    qreal m_accentOpacityNormal = 0;
+    qreal m_accentOpacityHover = 0;
+    qreal m_accentOpacityHit = 0;
+    qreal m_buttonOpacityNormal = 0;
+    qreal m_buttonOpacityHover = 0;
+    qreal m_buttonOpacityHit = 0;
+    qreal m_itemOpacityDisabled = 0;
 };
 }
 

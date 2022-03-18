@@ -26,9 +26,10 @@
 #include <QMap>
 #include <QList>
 
+#include "types/fraction.h"
+
 namespace Ms {
 class Harmony;
-class Fraction;
 
 //voicing modes to use
 enum class Voicing : signed char {

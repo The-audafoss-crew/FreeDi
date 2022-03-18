@@ -21,30 +21,31 @@
  */
 #include "appmenumodel.h"
 
+#include <QApplication>
+#include <QWindow>
+#include <QKeyEvent>
+
 #include "translation.h"
 
 #include "log.h"
+#include "config.h"
 
 using namespace mu::appshell;
 using namespace mu::ui;
-using namespace mu::notation;
+using namespace mu::uicomponents;
+using namespace mu::project;
 using namespace mu::workspace;
 using namespace mu::actions;
+using namespace mu::plugins;
+
+static QString makeId(const ActionCode& actionCode, int itemIndex)
+{
+    return QString::fromStdString(actionCode) + QString::number(itemIndex);
+}
 
 AppMenuModel::AppMenuModel(QObject* parent)
     : AbstractMenuModel(parent)
 {
-}
-
-QVariantList AppMenuModel::items() const
-{
-    QVariantList menuItems;
-
-    for (const MenuItem& menuItem: AbstractMenuModel::items()) {
-        menuItems << menuItem.toMap();
-    }
-
-    return menuItems;
 }
 
 void AppMenuModel::load()
@@ -54,156 +55,208 @@ void AppMenuModel::load()
     AbstractMenuModel::load();
 
     MenuItemList items {
-        fileItem(),
-        editItem(),
-        viewItem(),
-        addItem(),
-        formatItem(),
-        toolsItem(),
-        helpItem()
+        makeFileMenu(),
+        makeEditMenu(),
+        makeViewMenu(),
+        makeAddMenu(),
+        makeFormatMenu(),
+        makeToolsMenu(),
+        makePluginsMenu(),
+        makeHelpMenu(),
+#ifdef BUILD_DIAGNOSTICS
+        makeDiagnosticMenu()
+#endif
     };
 
     setItems(items);
 
     setupConnections();
 
-    emit itemsChanged();
+    //! NOTE: removes some undesired platform-specific items
+    //! (such as "Start Dictation" and "Special Characters" on macOS)
+    appMenuModelHook()->onAppMenuInited();
 }
 
-void AppMenuModel::onActionsStateChanges(const actions::ActionCodeList& codes)
+QWindow* AppMenuModel::appWindow() const
 {
-    AbstractMenuModel::onActionsStateChanges(codes);
-    emit itemsChanged();
+    return m_appWindow;
+}
+
+void AppMenuModel::setHighlightedMenuId(QString highlightedMenuId)
+{
+    if (m_highlightedMenuId == highlightedMenuId) {
+        return;
+    }
+
+    m_highlightedMenuId = highlightedMenuId;
+    emit highlightedMenuIdChanged(m_highlightedMenuId);
+}
+
+void AppMenuModel::setAppWindow(QWindow* appWindow)
+{
+    m_appWindow = appWindow;
 }
 
 void AppMenuModel::setupConnections()
 {
-    userScoresService()->recentScoreList().ch.onReceive(this, [this](const MetaList&) {
-        MenuItem& recentScoreListItem = findMenu("file-open");
-        recentScoreListItem.subitems = recentScores();
-        emit itemsChanged();
+    recentProjectsProvider()->recentProjectListChanged().onNotify(this, [this]() {
+        MenuItem& recentScoreListItem = findMenu("menu-file-open");
+
+        MenuItemList recentScoresList = makeRecentScoresItems();
+        bool openRecentEnabled = !recentScoresList.empty();
+
+        if (!recentScoresList.empty()) {
+            recentScoresList = appendClearRecentSection(recentScoresList);
+        }
+
+        UiActionState state = recentScoreListItem.state();
+        state.enabled = openRecentEnabled;
+        recentScoreListItem.setState(state);
+
+        recentScoreListItem.setSubitems(recentScoresList);
     });
 
     workspacesManager()->currentWorkspaceChanged().onNotify(this, [this]() {
-        MenuItem& workspacesItem = findMenu("select-workspace");
-        workspacesItem.subitems = workspacesItems();
-        emit itemsChanged();
+        MenuItem& workspacesItem = findMenu("menu-workspaces");
+        workspacesItem.setSubitems(makeWorkspacesItems());
     });
 
     workspacesManager()->workspacesListChanged().onNotify(this, [this]() {
-        MenuItem& workspacesItem = findMenu("select-workspace");
-        workspacesItem.subitems = workspacesItems();
-        emit itemsChanged();
+        MenuItem& workspacesItem = findMenu("menu-workspaces");
+        workspacesItem.setSubitems(makeWorkspacesItems());
     });
+
+    connect(qApp, &QApplication::applicationStateChanged, this, [this](Qt::ApplicationState state){
+        if (state != Qt::ApplicationActive) {
+            resetNavigation();
+        }
+    });
+
+    pluginsService()->pluginsChanged().onNotify(this, [this]() {
+        MenuItem& pluginsMenu = findMenu("menu-plugins");
+        pluginsMenu.setSubitems(makePluginsMenuSubitems());
+    });
+
+    pluginsService()->pluginChanged().onReceive(this, [this](const PluginInfo&) {
+        MenuItem& pluginsItem = findMenu("menu-plugins");
+        pluginsItem.setSubitems(makePluginsMenuSubitems());
+    });
+
+    qApp->installEventFilter(this);
 }
 
-MenuItem AppMenuModel::fileItem() const
+MenuItem* AppMenuModel::makeMenuItem(const actions::ActionCode& actionCode, MenuItemRole menuRole)
 {
-    MenuItemList recentScoresList = recentScores();
+    MenuItem* item = makeMenuItem(actionCode);
+    item->setRole(menuRole);
+    return item;
+}
+
+MenuItem* AppMenuModel::makeFileMenu()
+{
+    MenuItemList recentScoresList = makeRecentScoresItems();
+    bool openRecentEnabled = !recentScoresList.isEmpty();
+
+    if (!recentScoresList.empty()) {
+        recentScoresList = appendClearRecentSection(recentScoresList);
+    }
 
     MenuItemList fileItems {
         makeMenuItem("file-new"),
         makeMenuItem("file-open"),
-        makeMenu(qtrc("appshell", "Open &Recent"), recentScoresList, !recentScoresList.empty(), "file-open"),
+        makeMenu(qtrc("appshell", "Open &recent"), recentScoresList, "menu-file-open", openRecentEnabled),
         makeSeparator(),
         makeMenuItem("file-close"),
         makeMenuItem("file-save"),
         makeMenuItem("file-save-as"),
         makeMenuItem("file-save-a-copy"),
         makeMenuItem("file-save-selection"),
-        makeMenuItem("file-save-online"), // need implement
+        makeMenuItem("file-save-to-cloud"),
+        makeMenuItem("file-publish"),
         makeSeparator(),
         makeMenuItem("file-import-pdf"),
-        makeMenuItem("file-export"), // need implement
+        makeMenuItem("file-export"),
         makeSeparator(),
         makeMenuItem("edit-info"),
         makeMenuItem("parts"),
         makeSeparator(),
-        makeMenuItem("print"), // need implement
+        makeMenuItem("print"),
         makeSeparator(),
-        makeMenuItem("quit")
+        makeMenuItem("quit", MenuItemRole::QuitRole)
     };
 
-    return makeMenu(qtrc("appshell", "&File"), fileItems);
+    return makeMenu(qtrc("appshell", "&File"), fileItems, "menu-file");
 }
 
-MenuItem AppMenuModel::editItem() const
+MenuItem* AppMenuModel::makeEditMenu()
 {
     MenuItemList editItems {
         makeMenuItem("undo"),
         makeMenuItem("redo"),
         makeSeparator(),
-        makeMenuItem("cut"),
-        makeMenuItem("copy"),
-        makeMenuItem("paste"),
-        makeMenuItem("paste-half"),
-        makeMenuItem("paste-double"),
-        makeMenuItem("swap"),
-        makeMenuItem("delete"),
+        makeMenuItem("notation-cut"),
+        makeMenuItem("notation-copy"),
+        makeMenuItem("notation-paste"),
+        makeMenuItem("notation-paste-half"),
+        makeMenuItem("notation-paste-double"),
+        makeMenuItem("notation-swap"),
+        makeMenuItem("notation-delete"),
         makeSeparator(),
-        makeMenuItem("select-all"),
-        makeMenuItem("select-section"),
+        makeMenuItem("notation-select-all"),
+        makeMenuItem("notation-select-section"),
         makeMenuItem("find"),
         makeSeparator(),
-        makeMenuItem("preference-dialog")
+        makeMenuItem("preference-dialog", MenuItemRole::PreferencesRole)
     };
 
-    return makeMenu(qtrc("appshell", "&Edit"), editItems);
+    return makeMenu(qtrc("appshell", "&Edit"), editItems, "menu-edit");
 }
 
-MenuItem AppMenuModel::viewItem() const
+MenuItem* AppMenuModel::makeViewMenu()
 {
     MenuItemList viewItems {
-        makeMenuItem("toggle-palette"),
-        makeMenuItem("toggle-instruments"),
+#ifndef Q_OS_MAC
+        makeMenuItem("fullscreen"),
+#endif
+        makeMenuItem("toggle-palettes"),
         makeMenuItem("masterpalette"),
+        makeMenuItem("toggle-instruments"),
         makeMenuItem("inspector"),
+        makeMenuItem("toggle-selection-filter"),
         makeMenuItem("toggle-navigator"),
-        makeMenuItem("toggle-timeline"), // need implement
-        makeMenuItem("toggle-mixer"), // need implement
-        makeMenuItem("synth-control"), // need implement
-        makeMenuItem("toggle-piano"), // need implement
-        makeMenuItem("toggle-scorecmp-tool"), // need implement
+        makeMenuItem("toggle-timeline"),
+        makeMenuItem("toggle-mixer"),
+        // TODO: https://github.com/musescore/MuseScore/issues/9168
+        // makeMenuItem("toggle-piano"), // need implement
         makeSeparator(),
-        makeMenuItem("zoomin"),
-        makeMenuItem("zoomout"),
+        makeMenu(qtrc("appshell", "&Toolbars"), makeToolbarsItems(), "menu-toolbars"),
+        makeMenu(qtrc("appshell", "W&orkspaces"), makeWorkspacesItems(), "menu-workspaces"),
         makeSeparator(),
-        makeMenu(qtrc("appshell", "&Toolbars"), toolbarsItems()),
-        makeMenu(qtrc("appshell", "W&orkspaces"), workspacesItems(), true, "select-workspace"),
-        makeMenuItem("toggle-statusbar"),
+        makeMenu(qtrc("appshell", "Show"), makeShowItems(), "menu-show"),
         makeSeparator(),
-        makeMenuItem("split-h"), // need implement
-        makeMenuItem("split-v"), // need implement
-        makeSeparator(),
-        makeMenuItem("show-invisible"),
-        makeMenuItem("show-unprintable"),
-        makeMenuItem("show-frames"),
-        makeMenuItem("show-pageborders"),
-        makeMenuItem("mark-irregular"),
-        makeSeparator(),
-        makeMenuItem("fullscreen")
+        makeMenuItem("dock-restore-default-layout")
     };
 
-    return makeMenu(qtrc("appshell", "&View"), viewItems);
+    return makeMenu(qtrc("appshell", "&View"), viewItems, "menu-view");
 }
 
-MenuItem AppMenuModel::addItem() const
+MenuItem* AppMenuModel::makeAddMenu()
 {
     MenuItemList addItems {
-        makeMenu(qtrc("appshell", "N&otes"), notesItems()),
-        makeMenu(qtrc("appshell", "&Intervals"), intervalsItems()),
-        makeMenu(qtrc("appshell", "T&uplets"), tupletsItems()),
+        makeMenu(qtrc("appshell", "N&otes"), makeNotesItems()),
+        makeMenu(qtrc("appshell", "&Intervals"), makeIntervalsItems()),
+        makeMenu(qtrc("appshell", "T&uplets"), makeTupletsItems()),
         makeSeparator(),
-        makeMenu(qtrc("appshell", "&Measures"), measuresItems()),
-        makeMenu(qtrc("appshell", "&Frames"), framesItems()),
-        makeMenu(qtrc("appshell", "&Text"), textItems()),
-        makeMenu(qtrc("appshell", "&Lines"), linesItems()),
+        makeMenu(qtrc("appshell", "&Measures"), makeMeasuresItems()),
+        makeMenu(qtrc("appshell", "&Frames"), makeFramesItems()),
+        makeMenu(qtrc("appshell", "&Text"), makeTextItems()),
+        makeMenu(qtrc("appshell", "&Lines"), makeLinesItems()),
     };
 
-    return makeMenu(qtrc("appshell", "&Add"), addItems);
+    return makeMenu(qtrc("appshell", "&Add"), addItems, "menu-add");
 }
 
-MenuItem AppMenuModel::formatItem() const
+MenuItem* AppMenuModel::makeFormatMenu()
 {
     MenuItemList stretchItems {
         makeMenuItem("stretch+"),
@@ -213,7 +266,7 @@ MenuItem AppMenuModel::formatItem() const
 
     MenuItemList formatItems {
         makeMenuItem("edit-style"),
-        makeMenuItem("page-settings"), // need implement
+        makeMenuItem("page-settings"),
         makeSeparator(),
         makeMenuItem("add-remove-breaks"),
         makeMenu(qtrc("appshell", "&Stretch"), stretchItems),
@@ -222,14 +275,14 @@ MenuItem AppMenuModel::formatItem() const
         makeMenuItem("reset-beammode"),
         makeMenuItem("reset"),
         makeSeparator(),
-        makeMenuItem("load-style"), // need implement
-        makeMenuItem("save-style") // need implement
+        makeMenuItem("load-style"),
+        makeMenuItem("save-style")
     };
 
-    return makeMenu(qtrc("appshell", "F&ormat"), formatItems);
+    return makeMenu(qtrc("appshell", "F&ormat"), formatItems, "menu-format");
 }
 
-MenuItem AppMenuModel::toolsItem() const
+MenuItem* AppMenuModel::makeToolsMenu()
 {
     MenuItemList voicesItems {
         makeMenuItem("voice-x12"),
@@ -261,34 +314,52 @@ MenuItem AppMenuModel::toolsItem() const
         makeMenuItem("pitch-spell"),
         makeMenuItem("reset-groupings"),
         makeMenuItem("resequence-rehearsal-marks"),
+        /*
+         * TODO: https://github.com/musescore/MuseScore/issues/9670
         makeMenuItem("unroll-repeats"),
+         */
         makeSeparator(),
         makeMenuItem("copy-lyrics-to-clipboard"),
-        makeMenuItem("fotomode"), // need implement
         makeMenuItem("del-empty-measures"),
     };
 
-    return makeMenu(qtrc("appshell", "&Tools"), toolsItems);
+    return makeMenu(qtrc("appshell", "&Tools"), toolsItems, "menu-tools");
 }
 
-MenuItem AppMenuModel::helpItem() const
+MenuItem* AppMenuModel::makePluginsMenu()
 {
-    MenuItemList toursItems {
-        makeMenuItem("show-tours"), // need implement
-        makeMenuItem("reset-tours") // need implement
+    return makeMenu(qtrc("appshell", "&Plugins"), makePluginsMenuSubitems(), "menu-plugins");
+}
+
+MenuItemList AppMenuModel::makePluginsMenuSubitems()
+{
+    MenuItemList subitems {
+        makeMenuItem("manage-plugins"),
     };
 
+    MenuItemList enabledPlugins = makePluginsItems();
+
+    if (!enabledPlugins.empty()) {
+        subitems << makeSeparator();
+    }
+
+    subitems << enabledPlugins;
+
+    return subitems;
+}
+
+MenuItem* AppMenuModel::makeHelpMenu()
+{
     MenuItemList helpItems {
         makeMenuItem("online-handbook"),
-        makeMenu(qtrc("appshell", "&Tours"), toursItems),
         makeSeparator(),
-        makeMenuItem("about"), // need implement
-        makeMenuItem("about-qt"),
-        makeMenuItem("about-musicxml"), // need implement
+        makeMenuItem("about", MenuItemRole::AboutRole),
+        makeMenuItem("about-qt", MenuItemRole::AboutQtRole),
+        makeMenuItem("about-musicxml")
     };
 
     if (configuration()->isAppUpdatable()) {
-        helpItems << makeMenuItem("check-update"); // need implement
+        helpItems << makeMenuItem("check-update");
     }
 
     helpItems << makeSeparator()
@@ -296,33 +367,82 @@ MenuItem AppMenuModel::helpItem() const
               << makeMenuItem("report-bug")
               << makeMenuItem("leave-feedback")
               << makeSeparator()
-              << makeMenuItem("revert-factory"); // need implement
+              << makeMenuItem("revert-factory");
 
-    return makeMenu(qtrc("appshell", "&Help"), helpItems);
+    return makeMenu(qtrc("appshell", "&Help"), helpItems, "menu-help");
 }
 
-MenuItemList AppMenuModel::recentScores() const
+MenuItem* AppMenuModel::makeDiagnosticMenu()
+{
+    MenuItemList systemItems {
+        makeMenuItem("diagnostic-show-paths"),
+        makeMenuItem("diagnostic-show-profiler"),
+    };
+
+    MenuItemList accessibilityItems {
+        makeMenuItem("diagnostic-show-navigation-tree"),
+        makeMenuItem("diagnostic-show-accessible-tree"),
+        makeMenuItem("diagnostic-accessible-tree-dump"),
+    };
+
+    MenuItemList engravingItems {
+        makeMenuItem("diagnostic-show-engraving-elements"),
+    };
+
+    MenuItemList autobotItems {
+        makeMenuItem("autobot-show-scripts"),
+    };
+
+    MenuItemList items {
+        makeMenu(qtrc("appshell", "System"), systemItems),
+        makeMenu(qtrc("appshell", "Accessibility"), accessibilityItems),
+        makeMenu(qtrc("appshell", "Engraving"), engravingItems),
+        makeMenu(qtrc("appshell", "Autobot"), autobotItems),
+        makeMenuItem("multiinstances-dev-show-info")
+    };
+
+    return makeMenu(qtrc("appshell", "&Diagnostic"), items, "menu-diagnostic");
+}
+
+MenuItemList AppMenuModel::makeRecentScoresItems()
 {
     MenuItemList items;
-    MetaList recentScores = userScoresService()->recentScoreList().val;
+    ProjectMetaList recentProjects = recentProjectsProvider()->recentProjectList();
 
-    for (const Meta& meta : recentScores) {
-        MenuItem item = uiactionsRegister()->action("file-open");
-        item.title = !meta.title.isEmpty() ? meta.title : meta.fileName.toQString();
-        item.args = ActionData::make_arg1<io::path>(meta.filePath);
-        item.state.enabled = true;
-        item.selectable = true;
+    int index = 0;
+    for (const ProjectMeta& meta : recentProjects) {
+        MenuItem* item = new MenuItem(this);
+
+        UiAction action;
+        action.code = "file-open";
+        action.title = meta.fileName().toQString();
+        item->setAction(action);
+
+        item->setId(makeId(item->action().code, index++));
+
+        UiActionState state;
+        state.enabled = true;
+        item->setState(state);
+
+        item->setSelectable(true);
+        item->setArgs(ActionData::make_arg1<io::path>(meta.filePath));
 
         items << item;
     }
 
-    items << makeSeparator()
-          << makeMenuItem("clear-recent");
-
     return items;
 }
 
-MenuItemList AppMenuModel::notesItems() const
+MenuItemList AppMenuModel::appendClearRecentSection(const uicomponents::MenuItemList& recentScores)
+{
+    MenuItemList result = recentScores;
+    result << makeSeparator()
+           << makeMenuItem("clear-recent");
+
+    return result;
+}
+
+MenuItemList AppMenuModel::makeNotesItems()
 {
     MenuItemList items {
         makeMenuItem("note-input"),
@@ -347,7 +467,7 @@ MenuItemList AppMenuModel::notesItems() const
     return items;
 }
 
-MenuItemList AppMenuModel::intervalsItems() const
+MenuItemList AppMenuModel::makeIntervalsItems()
 {
     MenuItemList items {
         makeMenuItem("interval1"),
@@ -373,7 +493,7 @@ MenuItemList AppMenuModel::intervalsItems() const
     return items;
 }
 
-MenuItemList AppMenuModel::tupletsItems() const
+MenuItemList AppMenuModel::makeTupletsItems()
 {
     MenuItemList items {
         makeMenuItem("duplet"),
@@ -390,20 +510,20 @@ MenuItemList AppMenuModel::tupletsItems() const
     return items;
 }
 
-MenuItemList AppMenuModel::measuresItems() const
+MenuItemList AppMenuModel::makeMeasuresItems()
 {
     MenuItemList items {
-        makeMenuItem("insert-measure"),
-        makeMenuItem("insert-measures"),
+        makeMenuItem("insert-measures-after-selection", qtrc("notation", "Insert after selection…")),
+        makeMenuItem("insert-measures", qtrc("notation", "Insert before selection…")),
         makeSeparator(),
-        makeMenuItem("append-measure"),
-        makeMenuItem("append-measures")
+        makeMenuItem("insert-measures-at-start-of-score", qtrc("notation", "Insert at start of score…")),
+        makeMenuItem("append-measures", qtrc("notation", "Insert at end of score…"))
     };
 
     return items;
 }
 
-MenuItemList AppMenuModel::framesItems() const
+MenuItemList AppMenuModel::makeFramesItems()
 {
     MenuItemList items {
         makeMenuItem("insert-hbox"),
@@ -418,7 +538,7 @@ MenuItemList AppMenuModel::framesItems() const
     return items;
 }
 
-MenuItemList AppMenuModel::textItems() const
+MenuItemList AppMenuModel::makeTextItems()
 {
     MenuItemList items {
         makeMenuItem("title-text"),
@@ -446,7 +566,7 @@ MenuItemList AppMenuModel::textItems() const
     return items;
 }
 
-MenuItemList AppMenuModel::linesItems() const
+MenuItemList AppMenuModel::makeLinesItems()
 {
     MenuItemList items {
         makeMenuItem("add-slur"),
@@ -460,19 +580,18 @@ MenuItemList AppMenuModel::linesItems() const
     return items;
 }
 
-MenuItemList AppMenuModel::toolbarsItems() const
+MenuItemList AppMenuModel::makeToolbarsItems()
 {
     MenuItemList items {
         makeMenuItem("toggle-transport"),
         makeMenuItem("toggle-noteinput"),
-        makeMenuItem("toggle-notationtoolbar"),
-        makeMenuItem("toggle-undoredo")
+        makeMenuItem("toggle-statusbar")
     };
 
     return items;
 }
 
-MenuItemList AppMenuModel::workspacesItems() const
+MenuItemList AppMenuModel::makeWorkspacesItems()
 {
     MenuItemList items;
 
@@ -483,14 +602,23 @@ MenuItemList AppMenuModel::workspacesItems() const
         return workspace1->name() < workspace2->name();
     });
 
+    int index = 0;
     for (const IWorkspacePtr& workspace : workspaces) {
-        MenuItem item = uiactionsRegister()->action("select-workspace");
-        item.title = QString::fromStdString(workspace->title());
-        item.args = ActionData::make_arg1<std::string>(workspace->name());
+        MenuItem* item = new MenuItem(uiActionsRegister()->action("select-workspace"), this);
+        item->setId(makeId(item->action().code, index++));
 
-        item.selectable = true;
-        item.selected = (workspace == currentWorkspace);
-        item.state.enabled = true;
+        UiAction action = item->action();
+        action.title = QString::fromStdString(workspace->title());
+
+        item->setAction(action);
+        item->setArgs(ActionData::make_arg1<std::string>(workspace->name()));
+        item->setSelectable(true);
+        item->setSelected(workspace == currentWorkspace);
+
+        UiActionState state;
+        state.enabled = true;
+        state.checked = item->selected();
+        item->setState(state);
 
         items << item;
     }
@@ -499,4 +627,246 @@ MenuItemList AppMenuModel::workspacesItems() const
           << makeMenuItem("configure-workspaces");
 
     return items;
+}
+
+MenuItemList AppMenuModel::makeShowItems()
+{
+    MenuItemList items {
+        makeMenuItem("show-invisible"),
+        makeMenuItem("show-unprintable"),
+        makeMenuItem("show-frames"),
+        makeMenuItem("show-pageborders"),
+        makeMenuItem("show-irregular")
+    };
+
+    return items;
+}
+
+MenuItemList AppMenuModel::makePluginsItems()
+{
+    MenuItemList result;
+
+    for (const PluginInfo& plugin : pluginsService()->plugins(IPluginsService::Enabled).val) {
+        MenuItem* pluginItem = makeMenuItem(plugin.codeKey.toStdString(), plugin.name);
+        if (!pluginItem) {
+            continue;
+        }
+
+        result << pluginItem;
+    }
+
+    return result;
+}
+
+bool AppMenuModel::eventFilter(QObject* watched, QEvent* event)
+{
+#ifdef Q_OS_MACOS
+    return AbstractMenuModel::eventFilter(watched, event);
+#endif
+
+    if (watched != m_appWindow) {
+        return AbstractMenuModel::eventFilter(watched, event);
+    }
+
+    auto isAltKey = [](const QKeyEvent* keyEvent){
+        return keyEvent->key() == Qt::Key_Alt && keyEvent->key() != Qt::Key_Shift && !(keyEvent->modifiers() & Qt::ShiftModifier);
+    };
+
+    switch (event->type()) {
+    case QEvent::KeyPress: {
+        QKeyEvent* keyEvent = dynamic_cast<QKeyEvent*>(event);
+        if (isAltKey(keyEvent)) {
+            m_needActivateHighlight = true;
+        }
+
+        break;
+    }
+    case QEvent::KeyRelease: {
+        QKeyEvent* keyEvent = dynamic_cast<QKeyEvent*>(event);
+        if (!isAltKey(keyEvent)) {
+            break;
+        }
+
+        if (isNavigationStarted()) {
+            resetNavigation();
+            restoreMUNavigationSystemState();
+        } else {
+            if (m_needActivateHighlight) {
+                saveMUNavigationSystemState();
+                navigateToFirstMenu();
+            } else {
+                m_needActivateHighlight = true;
+            }
+        }
+
+        break;
+    }
+    case QEvent::ShortcutOverride: {
+        QKeyEvent* keyEvent = dynamic_cast<QKeyEvent*>(event);
+        bool isNavigationStarted = this->isNavigationStarted();
+        if (isNavigationStarted && isNavigateKey(keyEvent->key())) {
+            navigate(keyEvent->key());
+            m_needActivateHighlight = false;
+
+            event->accept();
+        } else if ((!keyEvent->modifiers() && isNavigationStarted)
+                   || ((keyEvent->modifiers() & Qt::AltModifier) && !(keyEvent->modifiers() & Qt::ShiftModifier)
+                       && keyEvent->text().length() == 1)) {
+            if (hasItemByActivateKey(keyEvent->text())) {
+                navigate(keyEvent->text());
+                m_needActivateHighlight = true;
+
+                event->accept();
+            } else {
+                m_needActivateHighlight = false;
+                resetNavigation();
+                restoreMUNavigationSystemState();
+
+                event->ignore();
+            }
+        } else {
+            m_needActivateHighlight = false;
+
+            event->ignore();
+        }
+
+        break;
+    }
+    case QEvent::MouseButtonPress: {
+        resetNavigation();
+        break;
+    }
+    default:
+        break;
+    }
+
+    return AbstractMenuModel::eventFilter(watched, event);
+}
+
+bool AppMenuModel::isNavigationStarted() const
+{
+    return !m_highlightedMenuId.isEmpty();
+}
+
+bool AppMenuModel::isNavigateKey(int key) const
+{
+    static QList<Qt::Key> keys {
+        Qt::Key_Left,
+        Qt::Key_Right,
+        Qt::Key_Down,
+        Qt::Key_Space,
+        Qt::Key_Escape,
+        Qt::Key_Return
+    };
+
+    return keys.contains(static_cast<Qt::Key>(key));
+}
+
+void AppMenuModel::navigate(int key)
+{
+    Qt::Key _key = static_cast<Qt::Key>(key);
+    switch (_key) {
+    case Qt::Key_Left: {
+        int newIndex = itemIndex(m_highlightedMenuId) - 1;
+        if (newIndex < 0) {
+            newIndex = rowCount() - 1;
+        }
+
+        setHighlightedMenuId(item(newIndex).id());
+        break;
+    }
+    case Qt::Key_Right: {
+        int newIndex = itemIndex(m_highlightedMenuId) + 1;
+        if (newIndex > rowCount() - 1) {
+            newIndex = 0;
+        }
+
+        setHighlightedMenuId(item(newIndex).id());
+        break;
+    }
+    case Qt::Key_Down:
+    case Qt::Key_Space:
+    case Qt::Key_Return:
+        activateHighlightedMenu();
+        break;
+    case Qt::Key_Escape:
+        resetNavigation();
+        restoreMUNavigationSystemState();
+        break;
+    default:
+        break;
+    }
+}
+
+bool AppMenuModel::hasItemByActivateKey(const QString& keySymbol)
+{
+    return !menuIdByActivateSymbol(keySymbol).isEmpty();
+}
+
+void AppMenuModel::navigate(const QString& keySymbol)
+{
+    saveMUNavigationSystemState();
+
+    setHighlightedMenuId(menuIdByActivateSymbol(keySymbol));
+    activateHighlightedMenu();
+}
+
+void AppMenuModel::resetNavigation()
+{
+    setHighlightedMenuId("");
+}
+
+void AppMenuModel::navigateToFirstMenu()
+{
+    setHighlightedMenuId(item(0).id());
+}
+
+void AppMenuModel::saveMUNavigationSystemState()
+{
+    if (!navigationController()->isHighlight()) {
+        return;
+    }
+
+    ui::INavigationControl* activeControl = navigationController()->activeControl();
+    if (activeControl) {
+        m_lastActiveNavigationControl = activeControl;
+        activeControl->setActive(false);
+    }
+}
+
+void AppMenuModel::restoreMUNavigationSystemState()
+{
+    if (m_lastActiveNavigationControl) {
+        m_lastActiveNavigationControl->requestActive();
+    }
+}
+
+void AppMenuModel::activateHighlightedMenu()
+{
+    emit openMenu(m_highlightedMenuId);
+    actionsDispatcher()->dispatch("nav-first-control");
+}
+
+QString AppMenuModel::highlightedMenuId() const
+{
+    return m_highlightedMenuId;
+}
+
+QString AppMenuModel::menuIdByActivateSymbol(const QString& symbol)
+{
+    for (int i = 0; i < rowCount(); i++) {
+        MenuItem& menuItem = item(i);
+        QString title = menuItem.action().title;
+
+        int activateKeyIndex = title.indexOf('&');
+        if (activateKeyIndex == -1) {
+            continue;
+        }
+
+        if (title[activateKeyIndex + 1].toLower() == symbol.toLower()) {
+            return menuItem.id();
+        }
+    }
+
+    return QString();
 }

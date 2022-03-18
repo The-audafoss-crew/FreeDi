@@ -19,25 +19,55 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-import QtQuick 2.7
-import QtQuick.Controls 2.0
+import QtQuick 2.15
+import QtQuick.Controls 2.15
 
-import "internal/Utils.js" as Utils
+import MuseScore.Ui 1.0
+import MuseScore.UiComponents 1.0
 
-RadioButton {
+RadioDelegate {
     id: root
 
     default property Component contentComponent
 
+    property alias navigation: keynavCtrl
+
+    ButtonGroup.group: ListView.view && ListView.view instanceof RadioButtonGroup ? ListView.view.radioButtonGroup : null
+
     implicitHeight: 20
-    implicitWidth: ListView.view ? (ListView.view.width - (ListView.view.spacing * (ListView.view.count - 1))) / ListView.view.count
-                                 : 30
+    implicitWidth: ListView.view
+                   ? (ListView.view.orientation === Qt.Vertical
+                      ? ListView.view.width
+                      : (ListView.view.width - (ListView.view.spacing * (ListView.view.count - 1))) / ListView.view.count)
+                   : 20
+
     spacing: 6
     padding: 0
 
     font: ui.theme.bodyFont
 
     hoverEnabled: true
+
+    //! NONE Disabled default Qt Accessible
+    Accessible.ignored: true
+
+    NavigationControl {
+        id: keynavCtrl
+        name: root.objectName != "" ? root.objectName : "RoundedRadioButton"
+        enabled: root.enabled && root.visible
+
+        accessible.role: MUAccessible.RadioButton
+        accessible.name: Boolean(contentLoader.item) ? contentLoader.item.accessibleName : ""
+        accessible.checked: root.checked
+
+        onActiveChanged: {
+            if (keynavCtrl.active) {
+                root.forceActiveFocus()
+            }
+        }
+
+        onTriggered: root.toggled()
+    }
 
     contentItem: Item {
         anchors.fill: parent
@@ -48,12 +78,14 @@ RadioButton {
 
             anchors.fill: parent
 
-            sourceComponent: Boolean(contentComponent) ? contentComponent : textLabel
+            sourceComponent: Boolean(root.contentComponent) ? root.contentComponent : textLabel
 
             Component {
                 id: textLabel
 
                 StyledTextLabel {
+                    property string accessibleName: text
+
                     text: root.text
                     font: root.font
                     horizontalAlignment: Qt.AlignLeft
@@ -77,6 +109,8 @@ RadioButton {
 
             property real borderColorOpacity: ui.theme.buttonOpacityNormal
 
+            NavigationFocusBorder { navigationCtrl: keynavCtrl }
+
             color: ui.theme.textFieldColor
             border.color: Utils.colorWithAlpha(ui.theme.fontPrimaryColor, borderColorOpacity)
             border.width: 1
@@ -93,6 +127,8 @@ RadioButton {
             visible: root.checked
         }
     }
+
+    background: Item { }
 
     states: [
         State {

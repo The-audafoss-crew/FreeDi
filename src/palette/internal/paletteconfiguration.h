@@ -23,13 +23,14 @@
 #define MU_PALETTE_PALETTECONFIGURATION_H
 
 #include "../ipaletteconfiguration.h"
+#include "async/asyncable.h"
 
 #include "modularity/ioc.h"
 #include "iglobalconfiguration.h"
 #include "ui/iuiconfiguration.h"
 
 namespace mu::palette {
-class PaletteConfiguration : public IPaletteConfiguration
+class PaletteConfiguration : public IPaletteConfiguration, public async::Asyncable
 {
     INJECT(palette, ui::IUiConfiguration, uiConfiguration)
     INJECT(palette, framework::IGlobalConfiguration, globalConfiguration)
@@ -40,8 +41,13 @@ public:
     double paletteScaling() const override;
     void setPaletteScaling(double scale) override;
 
-    bool isSinglePalette() const override;
+    double paletteSpatium() const override;
+
+    ValCh<bool> isSinglePalette() const override;
     void setIsSinglePalette(bool isSingle) override;
+
+    ValCh<bool> isSingleClickToOpenPalette() const override;
+    void setIsSingleClickToOpenPalette(bool isSingleClick) override;
 
     QColor elementsBackgroundColor() const override;
     QColor elementsColor() const override;
@@ -63,6 +69,9 @@ public:
 
 private:
     QColor themeColor(ui::ThemeStyleKey key) const;
+
+    ValCh<bool> m_isSinglePalette;
+    ValCh<bool> m_isSingleClickToOpenPalette;
 
     mutable QHash<QString, ValCh<PaletteConfig> > m_paletteConfigs;
     mutable QHash<QString, ValCh<PaletteCellConfig> > m_paletteCellsConfigs;

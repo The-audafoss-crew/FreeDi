@@ -25,13 +25,12 @@ import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
 import MuseScore.Dock 1.0
 
-import MuseScore.Plugins 1.0
 import MuseScore.Audio 1.0
+import MuseScore.Mpe 1.0
 
 import "./Gallery"
 import "./Interactive"
-import "./NotationDialogs"
-import "./Telemetry"
+import "./CrashHandler"
 import "./VST"
 import "./KeyNav"
 import "./Preferences"
@@ -49,13 +48,12 @@ DockPage {
         case "settings": root.central = settingsComp; break
         case "gallery": root.central = galleryComp; break
         case "interactive": root.central = interactiveComp; break
-        case "mu3dialogs": root.central = notationDialogs; break
-        case "telemetry": root.central = telemetryComp; break
+        case "crashhandler": root.central = crashhandlerComp; break
         case "audio": root.central = audioComp; break
         case "synth": root.central = synthSettingsComp; break
         case "midiports": root.central = midiPortsComp; break
         case "vst": root.central = vstComponent; break
-        case "plugins": root.central = pluginsComp; break
+        case "mpe": root.central = mpeComponent; break
         case "autobot": root.central = autobotComp; break
         case "navigation": root.central = keynavComp; break
         }
@@ -67,10 +65,11 @@ DockPage {
 
             objectName: "devtoolsPanel"
 
+            width: maximumWidth
             minimumWidth: 200
-            maximumWidth: 292
+            maximumWidth: 280
 
-            allowedAreas: Qt.NoDockWidgetArea
+            persistent: true
 
             Rectangle {
                 anchors.fill: parent
@@ -83,18 +82,17 @@ DockPage {
                         { "name": "settings", "title": "Settings" },
                         { "name": "gallery", "title": "UI Gallery" },
                         { "name": "interactive", "title": "Interactive" },
-                        { "name": "mu3dialogs", "title": "MU3Dialogs" },
-                        { "name": "telemetry", "title": "Telemetry" },
+                        { "name": "crashhandler", "title": "Crash handler" },
                         { "name": "audio", "title": "Audio" },
                         { "name": "synth", "title": "Synth" },
                         { "name": "midiports", "title": "MIDI ports" },
                         { "name": "vst", "title": "VST" },
-                        { "name": "plugins", "title": "Plugins" },
+                        { "name": "mpe", "title": "MPE" },
                         { "name": "autobot", "title": "Autobot" },
                         { "name": "navigation", "title": "KeyNav" }
                     ]
 
-                    onSelected: {
+                    onSelected: function(name) {
                         root.setCurrentCentral(name)
                     }
                 }
@@ -123,17 +121,9 @@ DockPage {
     }
 
     Component {
-        id: notationDialogs
+        id: crashhandlerComp
 
-        MU3Dialogs {}
-    }
-
-    Component {
-        id: telemetryComp
-
-        Loader {
-            source: "qrc:/qml/DevTools/Telemetry/TelemetryInfo.qml"
-        }
+        CrashHandlerDevTools {}
     }
 
     Component {
@@ -164,9 +154,11 @@ DockPage {
     }
 
     Component {
-        id: pluginsComp
+        id: mpeComponent
 
-        PluginsTests {}
+        Loader {
+            source: "qrc:/qml/DevTools/MPE/ArticulationsProfileEditorView.qml"
+        }
     }
 
     Component {

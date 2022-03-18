@@ -22,9 +22,15 @@
 
 #include "winframelesswindowcontroller.h"
 
+#if defined(_WIN32_WINNT) && (_WIN32_WINNT < 0x600)
+#undef _WIN32_WINNT // like defined to `0x502` in _mingw.h for Qt 5.15
+#define _WIN32_WINNT 0x0600 // Vista or later, needed for `iPaddedBorderWidth`
+#endif
 #include <Windows.h>
 #include <windowsx.h>
 #include <dwmapi.h>
+
+#include <QScreen>
 
 #include "log.h"
 
@@ -38,8 +44,9 @@ WinFramelessWindowController::WinFramelessWindowController()
     qApp->installNativeEventFilter(this);
 }
 
-void WinFramelessWindowController::init(QWindow* window)
+void WinFramelessWindowController::init()
 {
+    QWindow* window = mainWindow()->qWindow();
     IF_ASSERT_FAILED(window) {
         return;
     }
@@ -53,7 +60,7 @@ void WinFramelessWindowController::init(QWindow* window)
     const MARGINS shadow_on = { 1, 1, 1, 1 };
     DwmExtendFrameIntoClientArea(s_hwnd, &shadow_on);
 
-    SetWindowPos(s_hwnd, Q_NULLPTR, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+    SetWindowPos(s_hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
     ShowWindow(s_hwnd, SW_SHOW);
 }
 
@@ -74,6 +81,9 @@ bool WinFramelessWindowController::nativeEventFilter(const QByteArray& eventType
 
     switch (msg->message) {
     case WM_NCCALCSIZE: {
+        return removeWindowFrame(msg, result);
+    }
+    case WM_GETMINMAXINFO: {
         return calculateWindowSize(msg, result);
     }
     case WM_NCHITTEST: {
@@ -89,11 +99,20 @@ bool WinFramelessWindowController::nativeEventFilter(const QByteArray& eventType
     return false;
 }
 
-bool WinFramelessWindowController::calculateWindowSize(MSG* message, long* result) const
+bool WinFramelessWindowController::removeWindowFrame(MSG* message, long* result) const
 {
     NCCALCSIZE_PARAMS& params = *reinterpret_cast<NCCALCSIZE_PARAMS*>(message->lParam);
-    if (params.rgrc[0].top != 0) {
-        params.rgrc[0].top -= 1;
+
+    WINDOWPLACEMENT placement = {};
+    placement.length = sizeof(WINDOWPLACEMENT);
+    GetWindowPlacement(s_hwnd, &placement);
+
+    if (placement.showCmd == SW_SHOWMAXIMIZED) {
+        qreal borderWidth = this->borderWidth();
+        params.rgrc[0].left += borderWidth;
+        params.rgrc[0].top += borderWidth;
+        params.rgrc[0].right -= borderWidth;
+        params.rgrc[0].bottom -= borderWidth;
     }
 
     /// NOTE: remove window frame
@@ -101,9 +120,43 @@ bool WinFramelessWindowController::calculateWindowSize(MSG* message, long* resul
     return true;
 }
 
+bool WinFramelessWindowController::calculateWindowSize(MSG* message, long* result) const
+{
+    QWindow* window = mainWindow()->qWindow();
+    if (!window) {
+        return false;
+    }
+
+    QScreen* windowScreen = window->screen();
+    if (!windowScreen) {
+        return false;
+    }
+
+    const QRect availableGeometry = windowScreen->availableGeometry();
+    double scaleFactor = uiConfiguration()->guiScaling();
+
+    auto minMaxInfo = reinterpret_cast<MINMAXINFO*>(message->lParam);
+
+    minMaxInfo->ptMaxSize.x = availableGeometry.width() * scaleFactor;
+    minMaxInfo->ptMaxSize.y = availableGeometry.height() * scaleFactor;
+
+    if (windowScreen == QGuiApplication::primaryScreen()) {
+        minMaxInfo->ptMaxPosition.x = availableGeometry.x();
+        minMaxInfo->ptMaxPosition.y = availableGeometry.y();
+    }
+
+    minMaxInfo->ptMinTrackSize.x = window->minimumWidth() * scaleFactor;
+    minMaxInfo->ptMinTrackSize.y = window->minimumHeight() * scaleFactor;
+
+    minMaxInfo->ptMaxTrackSize = minMaxInfo->ptMaxSize;
+
+    *result = 0;
+    return true;
+}
+
 bool WinFramelessWindowController::processMouseMove(MSG* message, long* result) const
 {
-    const LONG borderWidth = 8;
+    const LONG borderWidth = this->borderWidth();
     RECT winrect;
     GetWindowRect(message->hwnd, &winrect);
 
@@ -240,4 +293,14 @@ bool WinFramelessWindowController::showSystemMenuIfNeed(MSG* message) const
 
     PostMessage(message->hwnd, WM_SYSCOMMAND, command, 0);
     return true;
+}
+
+int WinFramelessWindowController::borderWidth() const
+{
+    NONCLIENTMETRICS nonClientMetrics = {};
+    nonClientMetrics.cbSize = sizeof(nonClientMetrics);
+    SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(nonClientMetrics), &nonClientMetrics, 0);
+
+    int borderWidth = nonClientMetrics.iBorderWidth + nonClientMetrics.iPaddedBorderWidth + 2;
+    return borderWidth;
 }

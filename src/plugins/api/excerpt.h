@@ -46,7 +46,7 @@ class Excerpt : public QObject
 {
     Q_OBJECT
     /** The score object for this part */
-    Q_PROPERTY(Ms::PluginAPI::Score* partScore READ partScore)
+    Q_PROPERTY(Ms::PluginAPI::Score * partScore READ partScore)
     /** The title of this part */
     Q_PROPERTY(QString title READ title)
 
@@ -64,7 +64,7 @@ public:
     virtual ~Excerpt() {}
 
     Score* partScore();
-    QString title() { return e->title(); }
+    QString title() { return e->name(); }
     /// \endcond
 
     /// Checks whether two variables represent the same object. \since MuseScore 3.3

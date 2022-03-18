@@ -51,22 +51,22 @@ QVariantList ProgrammeStartPreferencesModel::startupModes() const
 
 ProgrammeStartPreferencesModel::StartModeList ProgrammeStartPreferencesModel::allStartupModes() const
 {
-    static const QMap<StartupSessionType, QString> sessionTitles {
-        { StartupSessionType::StartEmpty,  qtrc("appshell", "Start empty") },
-        { StartupSessionType::ContinueLastSession, qtrc("appshell", "Continue last session") },
-        { StartupSessionType::StartWithNewScore, qtrc("appshell", "Start with new score") },
-        { StartupSessionType::StartWithScore, qtrc("appshell", "Start with score:") }
+    static const QMap<StartupModeType, QString> modeTitles {
+        { StartupModeType::StartEmpty,  qtrc("appshell", "Start empty") },
+        { StartupModeType::ContinueLastSession, qtrc("appshell", "Continue last session") },
+        { StartupModeType::StartWithNewScore, qtrc("appshell", "Start with new score") },
+        { StartupModeType::StartWithScore, qtrc("appshell", "Start with score:") }
     };
 
     StartModeList modes;
 
-    for (StartupSessionType type : sessionTitles.keys()) {
-        bool canSelectScorePath = (type == StartupSessionType::StartWithScore);
+    for (StartupModeType type : modeTitles.keys()) {
+        bool canSelectScorePath = (type == StartupModeType::StartWithScore);
 
         StartMode mode;
-        mode.sessionType = type;
-        mode.title = sessionTitles[type];
-        mode.checked = configuration()->startupSessionType() == type;
+        mode.type = type;
+        mode.title = modeTitles[type];
+        mode.checked = configuration()->startupModeType() == type;
         mode.scorePath = canSelectScorePath ? configuration()->startupScorePath().toQString() : QString();
         mode.canSelectScorePath = canSelectScorePath;
 
@@ -94,9 +94,11 @@ QVariantList ProgrammeStartPreferencesModel::panels() const
 ProgrammeStartPreferencesModel::PanelList ProgrammeStartPreferencesModel::allPanels() const
 {
     PanelList panels {
+        /*
+         * TODO: https://github.com/musescore/MuseScore/issues/9807
         Panel { SplashScreen, qtrc("appshell", "Show splash screen"), configuration()->needShowSplashScreen() },
+         */
         Panel { Navigator, qtrc("appshell", "Show navigator"), configuration()->isNotationNavigatorVisible() },
-        Panel { Tours, qtrc("appshell", "Show tours"), configuration()->needShowTours() }
     };
 
     return panels;
@@ -116,12 +118,12 @@ void ProgrammeStartPreferencesModel::setCurrentStartupMode(int modeIndex)
         return;
     }
 
-    StartupSessionType selectedType = modes[modeIndex].sessionType;
-    if (selectedType == configuration()->startupSessionType()) {
+    StartupModeType selectedType = modes[modeIndex].type;
+    if (selectedType == configuration()->startupModeType()) {
         return;
     }
 
-    configuration()->setStartupSessionType(selectedType);
+    configuration()->setStartupModeType(selectedType);
     emit startupModesChanged();
 }
 
@@ -152,9 +154,6 @@ void ProgrammeStartPreferencesModel::setPanelVisible(int panelIndex, bool visibl
         break;
     case Navigator:
         configuration()->setIsNotationNavigatorVisible(visible);
-        break;
-    case Tours:
-        configuration()->setNeedShowTours(visible);
         break;
     case Unknown:
         return;

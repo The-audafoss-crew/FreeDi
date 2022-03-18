@@ -36,6 +36,8 @@
 
 #include "playback/iplaybackcontroller.h"
 
+class QMouseEvent;
+
 namespace mu::notation {
 class IControlledView
 {
@@ -45,19 +47,27 @@ public:
     virtual qreal width() const = 0;
     virtual qreal height() const = 0;
 
-    virtual void moveCanvas(int dx, int dy) = 0;
-    virtual void moveCanvasHorizontal(int dx) = 0;
-    virtual void moveCanvasVertical(int dy) = 0;
+    virtual PointF viewportTopLeft() const = 0;
 
+    //! Returns true if the canvas has been moved
+    virtual bool moveCanvas(qreal dx, qreal dy) = 0;
+    virtual void moveCanvasHorizontal(qreal dx) = 0;
+    virtual void moveCanvasVertical(qreal dy) = 0;
+
+    virtual RectF notationContentRect() const = 0;
     virtual qreal currentScaling() const = 0;
-    virtual void scale(qreal scaling, const QPoint& pos) = 0;
+    virtual void setScaling(qreal scaling, const PointF& pos) = 0;
 
-    virtual PointF toLogical(const QPoint& p) const = 0;
+    virtual PointF toLogical(const PointF& p) const = 0;
+    virtual PointF toLogical(const QPointF& p) const = 0;
+    virtual PointF fromLogical(const PointF& r) const = 0;
+    virtual RectF fromLogical(const RectF& r) const = 0;
 
     virtual bool isNoteEnterMode() const = 0;
     virtual void showShadowNote(const PointF& pos) = 0;
 
-    virtual void showContextMenu(const ElementType& elementType, const QPoint& pos) = 0;
+    virtual void showContextMenu(const ElementType& elementType, const QPointF& pos, bool activateFocus = false) = 0;
+    virtual void hideContextMenu() = 0;
 
     virtual INotationInteractionPtr notationInteraction() const = 0;
     virtual INotationPlaybackPtr notationPlayback() const = 0;
@@ -79,61 +89,88 @@ public:
     void initZoom();
     void zoomIn();
     void zoomOut();
+    void nextScreen();
+    void previousScreen();
+    void nextPage();
+    void previousPage();
+    void startOfScore();
+    void endOfScore();
 
+    bool readonly() const;
     void setReadonly(bool readonly);
 
+    void pinchToZoom(qreal scaleFactor, const QPointF& pos);
     void wheelEvent(QWheelEvent* event);
     void mousePressEvent(QMouseEvent* event);
     void mouseMoveEvent(QMouseEvent* event);
     void mouseReleaseEvent(QMouseEvent* event);
     void mouseDoubleClickEvent(QMouseEvent* event);
     void hoverMoveEvent(QHoverEvent* event);
+    bool shortcutOverrideEvent(QKeyEvent* event);
     void keyPressEvent(QKeyEvent* event);
+    void inputMethodEvent(QInputMethodEvent* event);
+
+    bool canHandleInputMethodQuery(Qt::InputMethodQuery query) const;
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const;
 
     void dragEnterEvent(QDragEnterEvent* event);
     void dragLeaveEvent(QDragLeaveEvent* event);
     void dragMoveEvent(QDragMoveEvent* event);
     void dropEvent(QDropEvent* event);
 
+    ElementType selectionType() const;
+    PointF selectionElementPos() const;
+
 private:
     INotationPtr currentNotation() const;
     INotationStylePtr notationStyle() const;
+    INotationInteractionPtr viewInteraction() const;
+    EngravingItem* hitElement() const;
 
     void zoomToPageWidth();
     void zoomToWholePage();
     void zoomToTwoPages();
+    void moveScreen(int direction);
+    void movePage(int direction);
 
     int currentZoomIndex() const;
     int currentZoomPercentage() const;
-    qreal notationScaling() const;
-    void setZoom(int zoomPercentage, const QPoint& pos = QPoint());
+    PointF findZoomFocusPoint() const;
+    void setScaling(qreal scaling, const PointF& pos = PointF());
+    void setZoom(int zoomPercentage, const PointF& pos = PointF());
+
+    qreal scalingFromZoomPercentage(int zoomPercentage) const;
+    int zoomPercentageFromScaling(qreal scaling) const;
 
     void setViewMode(const ViewMode& viewMode);
 
-    struct InteractData {
-        PointF beginPoint;
-        Element* hitElement = nullptr;
-        int hitStaffIndex = 0;
-    };
-
-    bool isDragAllowed() const;
     void startDragElements(ElementType elementsType, const PointF& elementsOffset);
 
     float hitWidth() const;
 
-    ElementType selectionType() const;
+    struct ClickContext {
+        PointF logicClickPos;
+        const QMouseEvent* event = nullptr;
+        Ms::EngravingItem* hitElement = nullptr;
+        const Ms::EngravingItem* prevHitElement = nullptr;
+    };
 
-    double guiScalling() const;
+    bool needSelect(const ClickContext& ctx) const;
+    void handleLeftClick(const ClickContext& ctx);
+    void handleRightClick(const ClickContext& ctx);
+
+    bool startTextEditingAllowed() const;
+    void updateTextCursorPosition();
 
     IControlledView* m_view = nullptr;
-    InteractData m_interactData;
 
-    QList<int> m_possibleZoomsPercentage;
+    QList<int> m_possibleZoomPercentages;
 
     bool m_readonly = false;
     bool m_isCanvasDragged = false;
 
     bool m_isZoomInited = false;
+    PointF m_beginPoint;
 };
 }
 

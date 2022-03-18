@@ -33,7 +33,6 @@
 
 namespace Ms {
 class Measure;
-class Fraction;
 }
 
 namespace mu::notation {
@@ -43,19 +42,9 @@ class MeasurePropertiesDialog : public QDialog, private Ui::MeasurePropertiesBas
 
     INJECT(notation, mu::context::IGlobalContext, context)
 
-    Q_PROPERTY(int index READ index WRITE setIndex NOTIFY indexChanged)
-
 public:
     MeasurePropertiesDialog(QWidget* parent = nullptr);
     MeasurePropertiesDialog(const MeasurePropertiesDialog& dialog);
-
-    int index() const;
-
-public slots:
-    void setIndex(int index);
-
-signals:
-    void indexChanged(int index);
 
 private slots:
     void bboxClicked(QAbstractButton* button);
@@ -63,6 +52,10 @@ private slots:
     void gotoPreviousMeasure();
 
 private:
+    bool eventFilter(QObject* obj, QEvent* event) override;
+
+    void initMeasure();
+
     void apply();
     Ms::Fraction len() const;
     bool isIrregular() const;
@@ -70,6 +63,8 @@ private:
     bool visible(int staffIdx);
     bool stemless(int staffIdx);
     void setMeasure(Ms::Measure* measure);
+
+    void hideEvent(QHideEvent*) override;
 
     Ms::Measure* m_measure = nullptr;
     int m_measureIndex = -1;

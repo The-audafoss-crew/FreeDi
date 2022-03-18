@@ -24,7 +24,7 @@ import QtGraphicalEffects 1.0
 
 import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
-import MuseScore.UserScores 1.0
+import MuseScore.Project 1.0
 
 FocusScope {
     id: root
@@ -32,7 +32,7 @@ FocusScope {
     property string title: ""
     property string author: ""
     property string duration: ""
-    property alias thumbnail: thumbnailItem.source
+    property alias thumbnail: thumbnailImage.source
 
     property alias navigation: navCtrl
 
@@ -41,11 +41,12 @@ FocusScope {
     NavigationControl {
         id: navCtrl
         name: root.title
+        enabled: root.enabled && root.visible
 
         accessible.role: MUAccessible.Button
-        accessible.name: root.title
+        accessible.name: root.title + ". " + root.author
 
-        onActiveChanged: {
+        onActiveChanged: function(active) {
             if (active) {
                 root.forceActiveFocus()
             }
@@ -54,16 +55,20 @@ FocusScope {
         onTriggered: root.clicked()
     }
 
+    NavigationFocusBorder {
+        navigationCtrl: root.navigation
+    }
+
     Column {
         anchors.fill: parent
 
         spacing: 8
 
         Item {
-            id: scoreRect
+            id: thumbnailRect
 
-            height: 150
-            width: 250
+            height: 144
+            width: 256
 
             opacity: 0.9
 
@@ -71,8 +76,9 @@ FocusScope {
             readonly property int radius: 3
 
             Image {
-                id: thumbnailItem
+                id: thumbnailImage
                 anchors.fill: parent
+                fillMode: Image.PreserveAspectCrop
             }
 
             Rectangle {
@@ -84,8 +90,8 @@ FocusScope {
                 color: "transparent"
                 radius: parent.radius
 
-                border.color: navCtrl.active ? ui.theme.focusColor : ui.theme.strokeColor
-                border.width: navCtrl.active ? 2 : parent.borderWidth
+                border.color: navCtrl.highlight ? ui.theme.focusColor : ui.theme.strokeColor
+                border.width: navCtrl.highlight ? 2 : parent.borderWidth
             }
 
             states: [
@@ -94,7 +100,7 @@ FocusScope {
                     when: mouseArea.containsMouse && !mouseArea.pressed
 
                     PropertyChanges {
-                        target: scoreRect
+                        target: thumbnailRect
                         opacity: 1
                         borderWidth: 1
                     }
@@ -105,19 +111,19 @@ FocusScope {
                     when: mouseArea.pressed
 
                     PropertyChanges {
-                        target: scoreRect
+                        target: thumbnailRect
                         opacity: 0.5
                     }
                 }
             ]
 
             RectangularGlow {
-                anchors.fill: scoreRect
+                anchors.fill: thumbnailRect
                 z: -1
 
                 glowRadius: 20
                 color: "#08000000"
-                cornerRadius: scoreRect.radius + glowRadius
+                cornerRadius: thumbnailRect.radius + glowRadius
             }
         }
 

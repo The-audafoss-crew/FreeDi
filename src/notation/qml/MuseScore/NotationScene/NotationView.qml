@@ -32,14 +32,15 @@ import "internal"
 FocusScope {
     id: root
 
-    property alias isNavigatorVisible: notationNavigator.visible
+    property alias name: notationView.objectName
+    property alias publishMode: notationView.publishMode
 
-    signal textEdittingStarted()
+    property alias isNavigatorVisible: notationNavigator.visible
 
     NavigationSection {
         id: navSec
         name: "NotationView"
-        order: 4
+        order: 5
         enabled: root.visible
     }
 
@@ -48,9 +49,12 @@ FocusScope {
         readonly property int scrollbarMargin: 4
     }
 
+    NotationContextMenuModel {
+        id: contextMenuModel
+    }
+
     Component.onCompleted: {
         notationView.load()
-        notationNavigator.load()
     }
 
     ColumnLayout {
@@ -64,6 +68,8 @@ FocusScope {
             navigationSection: navSec
         }
 
+        SeparatorLine { visible: tabPanel.visible }
+
         SplitView {
             id: splitView
 
@@ -72,113 +78,134 @@ FocusScope {
 
             orientation: notationNavigator.orientation === Qt.Horizontal ? Qt.Vertical : Qt.Horizontal
 
-            background: Rectangle {
-                color: notationView.backgroundColor
-            }
-
-            NotationPaintView {
-                id: notationView
-
+            NotationScrollAndZoomArea {
                 SplitView.fillWidth: true
                 SplitView.fillHeight: true
 
-                onTextEdittingStarted: {
-                    root.textEdittingStarted()
-                }
+                NotationPaintView {
+                    id: notationView
+                    anchors.fill: parent
 
-                onOpenContextMenuRequested: function (items, pos) {
-                    // TODO: replace `null` with a NavigationControl
-                    contextMenuLoader.toggleOpened(items, null, pos.x, pos.y)
-                }
-
-                onViewportChanged: {
-                    notationNavigator.setCursorRect(viewport)
-                }
-
-                onHorizontalScrollChanged: {
-                    if (!horizontalScrollBar.pressed) {
-                        horizontalScrollBar.setPosition(notationView.startHorizontalScrollPosition)
+                    NavigationPanel {
+                        id: navPanel
+                        name: "ScoreView"
+                        section: navSec
+                        enabled: notationView.enabled && notationView.visible
+                        direction: NavigationPanel.Both
+                        order: 2
                     }
-                }
 
-                onVerticalScrollChanged: {
-                    if (!verticalScrollBar.pressed) {
-                        verticalScrollBar.setPosition(notationView.startVerticalScrollPosition)
-                    }
-                }
+                    NavigationControl {
+                        id: fakeNavCtrl
+                        name: "Score"
+                        enabled: notationView.enabled && notationView.visible
 
-                StyledScrollBar {
-                    id: verticalScrollBar
+                        panel: navPanel
+                        order: 1
 
-                    anchors.top: parent.top
-                    anchors.bottomMargin: prv.scrollbarMargin
-                    anchors.bottom: parent.bottom
-                    anchors.right: parent.right
+                        accessible.role: MUAccessible.Panel
+                        accessible.name: "Score"
 
-                    orientation: Qt.Vertical
-
-                    color: "black"
-                    border.width: 1
-                    border.color: "white"
-
-                    size: notationView.verticalScrollSize
-
-                    onPositionChanged: {
-                        if (pressed) {
-                            notationView.scrollVertical(position)
+                        onActiveChanged: {
+                            if (fakeNavCtrl.active) {
+                                notationView.forceFocusIn()
+                                notationView.selectOnNavigationActive()
+                            } else {
+                                notationView.focus = false
+                            }
                         }
                     }
-                }
 
-                StyledScrollBar {
-                    id: horizontalScrollBar
+                    onActiveFocusRequested: {
+                        fakeNavCtrl.requestActive()
+                    }
 
-                    anchors.bottom: parent.bottom
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.rightMargin: prv.scrollbarMargin
+                    onShowContextMenuRequested: function (elementType, viewPos) {
+                        contextMenuModel.loadItems(elementType)
 
-                    orientation: Qt.Horizontal
+                        var posOnFakeItem = notationView.mapToItem(contextMenuParentFake, viewPos.x, viewPos.y)
 
-                    color: "black"
-                    border.width: 1
-                    border.color: "white"
-
-                    size: notationView.horizontalScrollSize
-
-                    onPositionChanged: {
-                        if (pressed) {
-                            notationView.scrollHorizontal(position)
+                        if (contextMenuLoader.isMenuOpened) {
+                            contextMenuLoader.update(contextMenuModel.items, posOnFakeItem.x, posOnFakeItem.y)
+                        } else {
+                            contextMenuLoader.open(contextMenuModel.items, posOnFakeItem.x, posOnFakeItem.y)
                         }
                     }
-                }
 
-                StyledMenuLoader {
-                    id: contextMenuLoader
+                    onHideContextMenuRequested: {
+                        contextMenuLoader.close()
+                    }
 
-                    onHandleAction: function (actionCode) {
-                        notationView.handleAction(actionCode)
+                    onViewportChanged: {
+                        notationNavigator.setCursorRect(viewport)
+                    }
+
+                    Item {
+                        id: contextMenuParentFake
+
+                        //! NOTE: Item coordinates are not important.
+                        //  To open the context menu next to the position(if the menu does not fit into the screen size),
+                        //  only the size of the item is important.
+                        //  Height and width are equal to zero - the menu will appear exactly
+                        //  next(depending on the limitation) to the pressed position.
+                        width: 0
+                        height: 0
+
+                        StyledMenuLoader {
+                            id: contextMenuLoader
+
+                            navigationParentControl: fakeNavCtrl
+
+                            onHandleMenuItem: function(itemId) {
+                                contextMenuModel.handleMenuItem(itemId)
+                            }
+                        }
                     }
                 }
             }
 
-            NotationNavigator {
+            Loader {
                 id: notationNavigator
 
-                property bool isVertical: orientation === Qt.Vertical
+                property var orientation: notationNavigator.item ? notationNavigator.item.orientation : Qt.Horizontal
 
                 visible: false
 
                 SplitView.preferredHeight: 100
                 SplitView.preferredWidth: 100
+                SplitView.minimumWidth: 30
+                SplitView.minimumHeight: 30
 
-                onMoveNotationRequested: function (dx, dy) {
-                    notationView.moveCanvas(dx, dy)
+                sourceComponent: notationNavigator.visible ? navigatorComp : null
+
+                function setCursorRect(viewport) {
+                    if (notationNavigator.item) {
+                        notationNavigator.item.setCursorRect(viewport)
+                    }
+                }
+            }
+
+            Component {
+                id: navigatorComp
+
+                NotationNavigator {
+
+                    property bool isVertical: orientation === Qt.Vertical
+
+                    objectName: root.name + "Navigator"
+
+                    Component.onCompleted: {
+                        load()
+                    }
+
+                    onMoveNotationRequested: function(dx, dy) {
+                        notationView.moveCanvas(dx, dy)
+                    }
                 }
             }
 
             handle: Rectangle {
-                id: background
+                id: resizingHandle
 
                 implicitWidth: 4
                 implicitHeight: 4
@@ -188,17 +215,17 @@ FocusScope {
                 states: [
                     State {
                         name: "PRESSED"
-                        when: background.SplitHandle.pressed
+                        when: resizingHandle.SplitHandle.pressed
                         PropertyChanges {
-                            target: background
+                            target: resizingHandle
                             opacity: ui.theme.accentOpacityHit
                         }
                     },
                     State {
                         name: "HOVERED"
-                        when: background.SplitHandle.hovered
+                        when: resizingHandle.SplitHandle.hovered
                         PropertyChanges {
-                            target: background
+                            target: resizingHandle
                             opacity: ui.theme.accentOpacityHover
                         }
                     }

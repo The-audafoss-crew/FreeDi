@@ -21,7 +21,7 @@
  */
 #include "notationselection.h"
 
-#include "libmscore/score.h"
+#include "libmscore/masterscore.h"
 #include "libmscore/segment.h"
 #include "libmscore/measure.h"
 
@@ -47,6 +47,11 @@ bool NotationSelection::isRange() const
     return score()->selection().isRange();
 }
 
+SelectionState NotationSelection::state() const
+{
+    return score()->selection().state();
+}
+
 bool NotationSelection::canCopy() const
 {
     return score()->selection().canCopy();
@@ -65,17 +70,17 @@ QMimeData* NotationSelection::mimeData() const
     return mimeData;
 }
 
-Element* NotationSelection::element() const
+EngravingItem* NotationSelection::element() const
 {
     return score()->selection().element();
 }
 
-std::vector<Element*> NotationSelection::elements() const
+std::vector<EngravingItem*> NotationSelection::elements() const
 {
-    std::vector<Element*> els;
-    QList<Ms::Element*> list = score()->selection().elements();
+    std::vector<EngravingItem*> els;
+    QList<Ms::EngravingItem*> list = score()->selection().elements();
     els.reserve(list.count());
-    for (Ms::Element* e : list) {
+    for (Ms::EngravingItem* e : list) {
         els.push_back(e);
     }
     return els;
@@ -95,33 +100,23 @@ std::vector<Note*> NotationSelection::notes(NoteFilter filter) const
     return {};
 }
 
-QRectF NotationSelection::canvasBoundingRect() const
+mu::RectF NotationSelection::canvasBoundingRect() const
 {
     if (isNone()) {
-        return QRectF();
+        return RectF();
     }
 
-    Ms::Element* el = score()->selection().element();
-    if (el) {
-        return el->canvasBoundingRect().toQRectF();
+    if (const Ms::EngravingItem* element = score()->selection().element()) {
+        return element->canvasBoundingRect();
     }
 
-    QList<Ms::Element*> els = score()->selection().elements();
-    if (els.isEmpty()) {
-        LOGW() << "selection not none, but no elements";
-        return QRectF();
+    RectF result;
+
+    for (const RectF& rect : range()->boundingArea()) {
+        result = result.united(rect);
     }
 
-    RectF rect;
-    for (const Ms::Element* elm: els) {
-        if (rect.isNull()) {
-            rect = elm->canvasBoundingRect();
-        } else {
-            rect = rect.united(elm->canvasBoundingRect());
-        }
-    }
-
-    return rect.toQRectF();
+    return result;
 }
 
 INotationSelectionRangePtr NotationSelection::range() const
@@ -132,4 +127,14 @@ INotationSelectionRangePtr NotationSelection::range() const
 Ms::Score* NotationSelection::score() const
 {
     return m_getScore->score();
+}
+
+void NotationSelection::onElementHit(EngravingItem* el)
+{
+    m_lastElementHit = el;
+}
+
+EngravingItem* NotationSelection::lastElementHit() const
+{
+    return m_lastElementHit;
 }

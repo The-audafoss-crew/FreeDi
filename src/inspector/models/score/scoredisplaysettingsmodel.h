@@ -27,7 +27,7 @@
 #include "notation/notationtypes.h"
 
 namespace mu::inspector {
-class ScoreSettingsModel : public AbstractInspectorModel, public mu::async::Asyncable
+class ScoreSettingsModel : public AbstractInspectorModel
 {
     Q_OBJECT
 
@@ -44,7 +44,7 @@ public:
     void loadProperties() override;
     void resetProperties() override;
 
-    bool hasAcceptableElements() const override;
+    bool isEmpty() const override;
 
     bool shouldShowInvisible() const;
     bool shouldShowFormatting() const;

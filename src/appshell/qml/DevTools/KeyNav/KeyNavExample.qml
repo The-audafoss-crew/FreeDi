@@ -56,6 +56,8 @@ Rectangle {
         height: 64
         color: "#fce94f"
 
+        anchors.margins: ui.theme.navCtrlBorderWidth
+
         sectionName: "mainMenu"
         sectionOrder: 101
 
@@ -78,7 +80,9 @@ Rectangle {
                     keynavSection: mainMenu.keynavSection
                     subsectionName: "subsec" + model.index
                     subsectionOrder: model.index
-                    onClicked: root.lastClickedInfo = "sec: " + mainMenu.sectionName + ", " + info
+                    onClicked: function(info) {
+                        root.lastClickedInfo = "sec: " + mainMenu.sectionName + ", " + info
+                    }
                 }
             }
         }
@@ -91,6 +95,8 @@ Rectangle {
         anchors.right: parent.right
         height: 64
         color: "#e9b96e"
+
+        anchors.margins: ui.theme.navCtrlBorderWidth
 
         sectionName: "topTools"
         sectionOrder: 102
@@ -106,7 +112,9 @@ Rectangle {
                     keynavSection: topTools.keynavSection
                     subsectionName: "subsec" + model.index
                     subsectionOrder: model.index
-                    onClicked: root.lastClickedInfo = "sec: " + topTools.sectionName + ", " + info
+                    onClicked: function(info) {
+                        root.lastClickedInfo = "sec: " + topTools.sectionName + ", " + info
+                    }
                 }
             }
         }
@@ -119,6 +127,8 @@ Rectangle {
         anchors.bottom: parent.bottom
         width: 120
         color: "#729fcf"
+
+        anchors.margins: ui.theme.navCtrlBorderWidth
 
         sectionName: "leftPanel"
         sectionOrder: 103
@@ -133,7 +143,9 @@ Rectangle {
                     keynavSection: leftPanel.keynavSection
                     subsectionName: "subsec" + model.index
                     subsectionOrder: model.index
-                    onClicked: root.lastClickedInfo = "sec: " + leftPanel.sectionName + ", " + info
+                    onClicked: function(info) {
+                        root.lastClickedInfo = "sec: " + leftPanel.sectionName + ", " + info
+                    }
                 }
             }
         }
@@ -146,6 +158,8 @@ Rectangle {
         anchors.bottom: parent.bottom
         width: 120
         color: "#8ae234"
+
+        anchors.margins: ui.theme.navCtrlBorderWidth
 
         sectionName: "rightPanel"
         sectionOrder: 105
@@ -160,7 +174,9 @@ Rectangle {
                     keynavSection: rightPanel.keynavSection
                     subsectionName: "subsec" + model.index
                     subsectionOrder: model.index
-                    onClicked: root.lastClickedInfo = "sec: " + rightPanel.sectionName + ", " + info
+                    onClicked: function(info) {
+                        root.lastClickedInfo = "sec: " + rightPanel.sectionName + ", " + info
+                    }
                 }
             }
         }
@@ -174,6 +190,8 @@ Rectangle {
         anchors.bottom: parent.bottom
         color: "#ef2929"
 
+        anchors.margins: ui.theme.navCtrlBorderWidth
+
         sectionName: "centerPanel"
         sectionOrder: 104
 
@@ -181,7 +199,9 @@ Rectangle {
             keynavSection: centerPanel.keynavSection
             subsectionName: "subsec0"
             subsectionOrder: 0
-            onClicked: root.lastClickedInfo = "sec: " + centerPanel.sectionName + ", " + info
+            onClicked: function(info) {
+                root.lastClickedInfo = "sec: " + centerPanel.sectionName + ", " + info
+            }
         }
     }
 }

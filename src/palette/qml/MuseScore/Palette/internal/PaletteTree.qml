@@ -30,12 +30,12 @@ import MuseScore.UiComponents 1.0
 
 import "utils.js" as Utils
 
-ListView {
+StyledListView {
     id: paletteTree
 
-    property PaletteWorkspace paletteWorkspace
-    property var paletteModel: Boolean(paletteWorkspace) ? paletteWorkspace.mainPaletteModel : null
-    property PaletteController paletteController: paletteWorkspace ? paletteWorkspace.mainPaletteController : null
+    property PaletteProvider paletteProvider
+    property var paletteModel: Boolean(paletteProvider) ? paletteProvider.mainPaletteModel : null
+    property PaletteController paletteController: paletteProvider ? paletteProvider.mainPaletteController : null
 
     property alias navigation: keynavTree
 
@@ -50,20 +50,18 @@ ListView {
     property bool enableAnimations: true
     property int expandDuration: enableAnimations ? 150 : 0 // duration of expand / collapse animations
 
-    property string backgroundColor: "#ffffff"
-
     preferredHighlightBegin: Math.min(48, Math.floor(0.1 * height))
     preferredHighlightEnd: Math.ceil(height - preferredHighlightBegin)
     highlightRangeMode: itemDragged ? ListView.ApplyRange : ListView.NoHighlightRange
 
     Accessible.name: qsTrc("palette", "Palettes Tree, contains %n palette(s)", "", count)
 
-
     NavigationPanel {
         id: keynavTree
         name: "PalettesTree"
+        enabled: paletteTree.enabled && paletteTree.visible
         direction: NavigationPanel.Both
-        onActiveChanged: {
+        onActiveChanged: function(active) {
             if (active) {
                 paletteTree.forceActiveFocus()
             }
@@ -71,8 +69,8 @@ ListView {
     }
 
     onSearchOpenedChanged: {
-        if (paletteWorkspace) {
-            paletteWorkspace.setSearching(searchOpened)
+        if (paletteProvider) {
+            paletteProvider.setSearching(searchOpened)
         }
     }
 
@@ -156,11 +154,6 @@ ListView {
         NumberAnimation { property: "y"; duration: 150 }
     }
 
-    ScrollBar.vertical: StyledScrollBar {}
-
-    boundsBehavior: Flickable.StopAtBounds
-    maximumFlickVelocity: 1500
-
     PlaceholderManager {
         id: placeholder
         delegateModel: paletteTreeDelegateModel
@@ -215,25 +208,62 @@ ListView {
         }
     }
 
+    function numberOfExpandedPalettes() {
+        const startIndex = paletteModel.index(0, 0);
+        const collapsedIndexList = paletteModel.match(startIndex, PaletteTreeModel.PaletteExpandedRole, true);
+        return collapsedIndexList.length;
+    }
+
+    function numberOfCollapsedPalettes() {
+        const startIndex = paletteModel.index(0, 0);
+        const collapsedIndexList = paletteModel.match(startIndex, PaletteTreeModel.PaletteExpandedRole, false);
+        return collapsedIndexList.length;
+    }
+
+    function canExpandAll() {
+        return !paletteProvider.isSinglePalette && numberOfCollapsedPalettes() > 0
+    }
+
     function expandCollapseAll(expand) {
         console.assert([true, false, null].indexOf(expand) !== -1, "Invalid value for expand: " + expand);
         // expand = true  - expand all
         //          false - collapse all
-        //          null  - decide based on current state
+        //          null  - decide based on current state: expand if possible, collapse otherwise
         if (expand === null) {
-            // if any are collapsed then expand all, otherwise collapse all
-            const startIndex = paletteModel.index(0, 0);
-            const collapsedIndexList = paletteModel.match(startIndex, PaletteTreeModel.PaletteExpandedRole, false);
-            expand = !!collapsedIndexList.length;
+            expand = canExpandAll()
         }
 
-        for (var idx = 0; idx < count; idx++) {
+        for (let idx = 0; idx < count; idx++) {
             const paletteIndex = paletteModel.index(idx, 0);
             paletteModel.setData(paletteIndex, expand, PaletteTreeModel.PaletteExpandedRole);
         }
 
         currentItem.bringIntoViewAfterExpanding();
-        return expand; // bool, did we expand?
+
+        return expand; // return true if we did expand
+    }
+
+    Connections {
+        target: paletteProvider
+
+        function onIsSinglePaletteChanged() {
+            if (paletteProvider.isSinglePalette) {
+                // Collapse all except first one
+                let hasFoundExpandedPalette = false
+                for (let idx = 0; idx < count; idx++) {
+                    const paletteIndex = paletteModel.index(idx, 0);
+
+                    if (hasFoundExpandedPalette) {
+                        paletteModel.setData(paletteIndex, false, PaletteTreeModel.PaletteExpandedRole);
+                        continue
+                    }
+
+                    if (paletteModel.data(paletteIndex, PaletteTreeModel.PaletteExpandedRole)) {
+                        hasFoundExpandedPalette = true
+                    }
+                }
+            }
+        }
     }
 
     model: DelegateModel {
@@ -247,6 +277,18 @@ ListView {
             property int rowIndex: index
             property int navigationRow: (index + 1) * 10000 // to make unique
             property var modelIndex: paletteTree.model.modelIndex(index, 0)
+
+            Keys.onShortcutOverride: function(event) {
+                switch (event.key) {
+                case Qt.Key_Backspace:
+                case Qt.Key_Delete:
+                    event.accepted = true
+                    paletteTree.removeSelectedItems()
+                    break
+                default:
+                    break
+                }
+            }
 
             onActiveFocusChanged: {
                 if (activeFocus) {
@@ -283,44 +325,68 @@ ListView {
 
             property bool selected: paletteSelectionModel.hasSelection ? paletteSelectionModel.isSelected(modelIndex) : false
 
-            function doItemClicked() {
+            onClicked: {
                 forceActiveFocus();
-                const cmd = selected ? ItemSelectionModel.Toggle : ItemSelectionModel.ClearAndSelect;
-                paletteSelectionModel.setCurrentIndex(modelIndex, cmd);
+
+                if (paletteProvider.isSingleClickToOpenPalette) {
+                    toggleExpand()
+
+                    if (selected && !expanded) {
+                        paletteSelectionModel.clearSelection();
+                    } else if (!selected) {
+                        paletteSelectionModel.setCurrentIndex(modelIndex, ItemSelectionModel.ClearAndSelect);
+                    }
+                } else {
+                    const cmd = selected ? ItemSelectionModel.Toggle : ItemSelectionModel.ClearAndSelect;
+                    paletteSelectionModel.setCurrentIndex(modelIndex, cmd);
+                }
+
                 paletteTree.currentIndex = index;
             }
 
-            onClicked: {
-                control.doItemClicked()
-            }
-
             onDoubleClicked: {
+                if (paletteProvider.isSingleClickToOpenPalette) {
+                    return;
+                }
+
                 forceActiveFocus();
                 paletteSelectionModel.setCurrentIndex(modelIndex, ItemSelectionModel.Deselect);
                 toggleExpand();
             }
 
             background: ListItemBlank {
-                background.color: paletteTree.backgroundColor
                 visible: !control.Drag.active
                 isSelected: control.selected
 
-                navigation.name: "PaletteTreeItem"
+                navigation.name: model.display
                 navigation.panel: keynavTree
                 navigation.row: control.navigationRow
                 navigation.column: 0
+                navigation.accessible.name: control.text
                 enabled: control.visible
                 navigation.onActiveChanged: {
-                    if (navigation.active && !control.selected) {
-                        control.doItemClicked()
+                    if (navigation.active) {
+                        forceActiveFocus();
+
+                        if (!control.selected) {
+                            paletteSelectionModel.setCurrentIndex(modelIndex, ItemSelectionModel.ClearAndSelect);
+                        }
+
+                        paletteTree.currentIndex = index;
+                        paletteTree.positionViewAtIndex(control.rowIndex, ListView.Contain);
                     }
-                    paletteTree.positionViewAtIndex(control.rowIndex, ListView.Contain);
+                }
+                navigation.onTriggered: {
+                    control.toggleExpand()
                 }
             }
 
             highlighted: (activeFocus && !selected) || DelegateModel.isUnresolved
 
             property bool popupExpanded: palettePopup.isOpened
+            onPopupExpandedChanged: {
+                paletteTree.interactive = !popupExpanded
+            }
 
             function togglePopup(btn) {
                 const expand = !popupExpanded;
@@ -364,10 +430,10 @@ ListView {
                 placeholder.makePlaceholder(control.rowIndex, paletteTree.placeholderData());
             }
 
-            Drag.onDragFinished: {
+            Drag.onDragFinished: function(dropAction) {
                 paletteTree.itemDragged = false;
 
-                if (dropAction != Qt.IgnoreAction) {
+                if (dropAction !== Qt.IgnoreAction) {
                     paletteTree.currentIndex = -1;
                 }
 
@@ -378,7 +444,7 @@ ListView {
                 DelegateModel.inItems = true;
                 DelegateModel.inPersistedItems = false;
 
-                if (dropAction == Qt.MoveAction) {
+                if (dropAction === Qt.MoveAction) {
                     controller.move(
                                 root, rowIndex,
                                 root, destIndex);
@@ -398,8 +464,8 @@ ListView {
                     }
                 }
 
-                onDropped: {
-                    if (drop.proposedAction == Qt.MoveAction)
+                onDropped: function(drop) {
+                    if (drop.proposedAction === Qt.MoveAction)
                         drop.acceptProposedAction();
                 }
             }
@@ -450,6 +516,8 @@ ListView {
                     hovered: control.hovered
                     text: model.display
 
+                    isInVisibleArea: control.y >= paletteTree.contentY && control.y < (paletteTree.contentY + paletteTree.height)
+
                     navigationPanel: keynavTree
                     navigationRow: control.navigationRow
 
@@ -469,14 +537,16 @@ ListView {
                     }
 
                     editingEnabled: model.editable
-                    onEnableEditingToggled: model.editable = val
+                    onEnableEditingToggled: function(val) {
+                        model.editable = val
+                    }
 
                     onHideSelectedElementsRequested: paletteTree.removeSelectedItems(control.modelIndex);
 
                     onInsertNewPaletteRequested: paletteTree.insertCustomPalette(control.rowIndex);
                     onHidePaletteRequested: control.hidePalette();
 
-                    paletteWorkspace: paletteTree.paletteWorkspace
+                    paletteProvider: paletteTree.paletteProvider
                     modelIndex: control.modelIndex
 
                     onEditPalettePropertiesRequested: {
@@ -491,12 +561,16 @@ ListView {
 
                         drag.axis: Drag.YAxis
 
-                        onPressed: control.grabToImage(function(result) {
-                            control.Drag.imageSource = result.url
-                        })
+                        onPressed: function(mouse) {
+                            control.grabToImage(function(result) {
+                                control.Drag.imageSource = result.url
+                                control.Drag.hotSpot.x = mouse.x
+                                control.Drag.hotSpot.y = mouse.y
+                            })
+                        }
 
-                        onClicked: control.onClicked(mouse)
-                        onDoubleClicked: control.onDoubleClicked(mouse)
+                        onClicked: function(mouse) { control.clicked() }
+                        onDoubleClicked: function(mouse) { control.doubleClicked() }
                     }
                 }
 
@@ -523,8 +597,13 @@ ListView {
                         paletteController: paletteTree.paletteController
                         selectionModel: paletteSelectionModel
 
+                        isInVisibleArea: {
+                            var mainPaletteBottom = control.y + mainPalette.height
+                            return mainPaletteBottom >= paletteTree.contentY && mainPaletteBottom < (paletteTree.contentY + paletteTree.height)
+                        }
+
                         showMoreButton: !filter.length
-                        onMoreButtonClicked: control.togglePopup(btn);
+                        onMoreButtonClicked: function(btn) { control.togglePopup(btn) }
 
                         onVisibleChanged: {
                             if (!visible && control.popupExpanded) {
@@ -553,13 +632,13 @@ ListView {
                     onIsOpenedChanged: {
                         // build pool model on first popup appearance
                         if (visible && !poolPalette) {
-                            poolPalette = paletteTree.paletteWorkspace.poolPaletteModel(control.modelIndex);
-                            poolPaletteRootIndex = paletteTree.paletteWorkspace.poolPaletteIndex(control.modelIndex, poolPalette);
-                            poolPaletteController = paletteTree.paletteWorkspace.poolPaletteController(poolPalette, control.modelIndex);
+                            poolPalette = paletteTree.paletteProvider.poolPaletteModel(control.modelIndex);
+                            poolPaletteRootIndex = paletteTree.paletteProvider.poolPaletteIndex(control.modelIndex, poolPalette);
+                            poolPaletteController = paletteTree.paletteProvider.poolPaletteController(poolPalette, control.modelIndex);
 
-                            customPalette = paletteTree.paletteWorkspace.customElementsPaletteModel
-                            customPaletteRootIndex = paletteTree.paletteWorkspace.customElementsPaletteIndex(control.modelIndex) // TODO: make a property binding? (but that works incorrectly)
-                            customPaletteController = paletteTree.paletteWorkspace.customElementsPaletteController
+                            customPalette = paletteTree.paletteProvider.customElementsPaletteModel
+                            customPaletteRootIndex = paletteTree.paletteProvider.customElementsPaletteIndex(control.modelIndex) // TODO: make a property binding? (but that works incorrectly)
+                            customPaletteController = paletteTree.paletteProvider.customElementsPaletteController
                         }
                     }
 
@@ -584,7 +663,7 @@ ListView {
                             scrollToPopupBottom();
                     }
 
-                    onAddElementsRequested: {
+                    onAddElementsRequested: function(mimeDataList) {
                         const parentIndex = control.modelIndex;
                         var idx = paletteTree.paletteModel.rowCount(parentIndex);
 

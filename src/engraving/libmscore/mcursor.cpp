@@ -20,21 +20,28 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "libmscore/mcursor.h"
-#include "libmscore/part.h"
-#include "libmscore/staff.h"
-#include "libmscore/note.h"
-#include "libmscore/chord.h"
-#include "libmscore/rest.h"
-#include "libmscore/durationtype.h"
-#include "libmscore/measure.h"
-#include "libmscore/segment.h"
-#include "libmscore/score.h"
-#include "libmscore/instrtemplate.h"
-#include "libmscore/keysig.h"
-#include "libmscore/timesig.h"
+#include "mcursor.h"
+
+#include "compat/scoreaccess.h"
+
+#include "factory.h"
+#include "part.h"
+#include "staff.h"
+#include "note.h"
+#include "chord.h"
+#include "rest.h"
+#include "durationtype.h"
+#include "measure.h"
+#include "segment.h"
+#include "instrtemplate.h"
+#include "keysig.h"
+#include "timesig.h"
+#include "masterscore.h"
+
+#include "log.h"
 
 using namespace mu;
+using namespace mu::engraving;
 
 namespace Ms {
 extern MScore* mscore;
@@ -65,7 +72,7 @@ void MCursor::createMeasures()
                 break;
             }
         }
-        measure = new Measure(_score);
+        measure = Factory::createMeasure(_score->dummy()->system());
         measure->setTick(tick);
         measure->setTimesig(_sig);
         measure->setTicks(_sig);
@@ -84,13 +91,13 @@ Chord* MCursor::addChord(int pitch, const TDuration& duration)
     Segment* segment = measure->getSegment(SegmentType::ChordRest, _tick);
     Chord* chord = toChord(segment->element(_track));
     if (chord == 0) {
-        chord = new Chord(_score);
+        chord = Factory::createChord(segment);
         chord->setTrack(_track);
         chord->setDurationType(duration);
         chord->setTicks(duration.fraction());
         segment->add(chord);
     }
-    Note* note = new Note(_score);
+    Note* note = Factory::createNote(chord);
     chord->add(note);
     note->setPitch(pitch);
     note->setTpcFromPitch();
@@ -109,7 +116,7 @@ void MCursor::addKeySig(Key key)
     Segment* segment = measure->getSegment(SegmentType::KeySig, _tick);
     int n = _score->nstaves();
     for (int i = 0; i < n; ++i) {
-        KeySig* ks = new KeySig(_score);
+        KeySig* ks = Factory::createKeySig(segment);
         ks->setKey(key);
         ks->setTrack(i * VOICES);
         segment->add(ks);
@@ -127,7 +134,7 @@ TimeSig* MCursor::addTimeSig(const Fraction& f)
     Segment* segment = measure->getSegment(SegmentType::TimeSig, _tick);
     TimeSig* ts = 0;
     for (int i = 0; i < _score->nstaves(); ++i) {
-        ts = new TimeSig(_score);
+        ts = Factory::createTimeSig(segment);
         ts->setSig(f, TimeSigType::NORMAL);
         ts->setTrack(i * VOICES);
         segment->add(ts);
@@ -140,11 +147,12 @@ TimeSig* MCursor::addTimeSig(const Fraction& f)
 //   createScore
 //---------------------------------------------------------
 
-void MCursor::createScore(const QString& name)
+void MCursor::createScore(const QString& /*name*/)
 {
     delete _score;
-    _score = new MasterScore(mscore->baseStyle());
-    _score->setName(name);
+    _score = mu::engraving::compat::ScoreAccess::createMasterScoreWithBaseStyle();
+    // TODO: set path/filename
+    NOT_IMPLEMENTED;
     move(0, Fraction(0, 1));
 }
 
@@ -165,8 +173,7 @@ void MCursor::move(int t, const Fraction& tick)
 void MCursor::addPart(const QString& instrument)
 {
     Part* part   = new Part(_score);
-    Staff* staff = new Staff(_score);
-    staff->setPart(part);
+    Staff* staff = Factory::createStaff(part);
     InstrumentTemplate* it = searchTemplate(instrument);
     if (it == 0) {
         qFatal("Did not find instrument <%s>", qPrintable(instrument));

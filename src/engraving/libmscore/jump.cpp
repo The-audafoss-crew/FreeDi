@@ -23,12 +23,13 @@
 #include "jump.h"
 
 #include "translation.h"
+#include "rw/xml.h"
 
 #include "score.h"
-#include "xml.h"
 #include "measure.h"
 
 using namespace mu;
+using namespace mu::engraving;
 
 namespace Ms {
 //---------------------------------------------------------
@@ -50,7 +51,21 @@ const JumpTypeTable jumpTypeTable[] = {
     { Jump::Type::DC_AL_CODA, "D.C. al Coda", "start", "coda", "codab", QT_TRANSLATE_NOOP("jumpType", "Da Capo al Coda") },
     { Jump::Type::DS_AL_CODA, "D.S. al Coda", "segno", "coda", "codab", QT_TRANSLATE_NOOP("jumpType", "D.S. al Coda") },
     { Jump::Type::DS_AL_FINE, "D.S. al Fine", "segno", "fine", "",      QT_TRANSLATE_NOOP("jumpType", "D.S. al Fine") },
-    { Jump::Type::DS,         "D.S.",         "segno", "end",  "",      QT_TRANSLATE_NOOP("jumpType", "D.S.") }
+    { Jump::Type::DS,         "D.S.",         "segno", "end",  "",      QT_TRANSLATE_NOOP("jumpType", "D.S.") },
+
+    { Jump::Type::DC_AL_DBLCODA,  "D.C. al Double Coda",   "start", "varcoda",  "codab", QT_TRANSLATE_NOOP("jumpType",
+                                                                                                           "Da Capo al Double Coda") },
+    { Jump::Type::DS_AL_DBLCODA,  "D.S. al Double Coda",   "segno", "varcoda",  "codab", QT_TRANSLATE_NOOP("jumpType",
+                                                                                                           "Da Segno al Double Coda") },
+    { Jump::Type::DSS,            "Dal Segno Segno",       "varsegno", "end",  "", QT_TRANSLATE_NOOP("jumpType", "Dal Segno Segno") },
+    { Jump::Type::DSS_AL_CODA,    "D.S.S. al Coda",        "varsegno", "coda",  "codab", QT_TRANSLATE_NOOP("jumpType",
+                                                                                                           "Dal Segno Segno al Coda") },
+    { Jump::Type::DSS_AL_DBLCODA, "D.S.S. al Double Coda", "varsegno", "varcoda", "codab", QT_TRANSLATE_NOOP("jumpType",
+                                                                                                             "Dal Segno Segno al Double Coda") },
+    { Jump::Type::DSS_AL_FINE,    "D.S.S. al Fine",        "varsegno", "fine",  "",
+      QT_TRANSLATE_NOOP("jumpType", "Dal Segno Segno al Fine") },
+    { Jump::Type::DCODA,          "Da Coda",               "coda", "end",  "", QT_TRANSLATE_NOOP("jumpType", "Da Coda") },
+    { Jump::Type::DDBLCODA,       "Da Double Coda",        "varcoda", "end",  "", QT_TRANSLATE_NOOP("jumpType", "Da Double Coda") }
 };
 
 int jumpTypeTableSize()
@@ -62,8 +77,8 @@ int jumpTypeTableSize()
 //   Jump
 //---------------------------------------------------------
 
-Jump::Jump(Score* s)
-    : TextBase(s, Tid::REPEAT_RIGHT, ElementFlag::MOVABLE | ElementFlag::SYSTEM)
+Jump::Jump(Measure* parent)
+    : TextBase(ElementType::JUMP, parent, TextStyleType::REPEAT_RIGHT, ElementFlag::MOVABLE | ElementFlag::SYSTEM | ElementFlag::ON_STAFF)
 {
     initElementStyle(&jumpStyle);
     setLayoutToParentWidth(true);
@@ -82,7 +97,7 @@ void Jump::setJumpType(Type t)
             setJumpTo(p.jumpTo);
             setPlayUntil(p.playUntil);
             setContinueAt(p.continueAt);
-            initTid(Tid::REPEAT_RIGHT);
+            initTextStyleType(TextStyleType::REPEAT_RIGHT);
             break;
         }
     }
@@ -149,13 +164,13 @@ void Jump::read(XmlReader& e)
 
 void Jump::write(XmlWriter& xml) const
 {
-    xml.stag(this);
+    xml.startObject(this);
     TextBase::writeProperties(xml);
     xml.tag("jumpTo", _jumpTo);
     xml.tag("playUntil", _playUntil);
     xml.tag("continueAt", _continueAt);
     writeProperty(xml, Pid::PLAY_REPEATS);
-    xml.etag();
+    xml.endObject();
 }
 
 //---------------------------------------------------------
@@ -189,7 +204,7 @@ void Jump::undoSetContinueAt(const QString& s)
 //   getProperty
 //---------------------------------------------------------
 
-QVariant Jump::getProperty(Pid propertyId) const
+PropertyValue Jump::getProperty(Pid propertyId) const
 {
     switch (propertyId) {
     case Pid::JUMP_TO:
@@ -210,7 +225,7 @@ QVariant Jump::getProperty(Pid propertyId) const
 //   setProperty
 //---------------------------------------------------------
 
-bool Jump::setProperty(Pid propertyId, const QVariant& v)
+bool Jump::setProperty(Pid propertyId, const PropertyValue& v)
 {
     switch (propertyId) {
     case Pid::JUMP_TO:
@@ -240,7 +255,7 @@ bool Jump::setProperty(Pid propertyId, const QVariant& v)
 //   propertyDefault
 //---------------------------------------------------------
 
-QVariant Jump::propertyDefault(Pid propertyId) const
+PropertyValue Jump::propertyDefault(Pid propertyId) const
 {
     switch (propertyId) {
     case Pid::JUMP_TO:
@@ -250,7 +265,7 @@ QVariant Jump::propertyDefault(Pid propertyId) const
     case Pid::PLAY_REPEATS:
         return false;
     case Pid::PLACEMENT:
-        return int(Placement::ABOVE);
+        return PlacementV::ABOVE;
     default:
         break;
     }
@@ -261,7 +276,7 @@ QVariant Jump::propertyDefault(Pid propertyId) const
 //   nextSegmentElement
 //---------------------------------------------------------
 
-Element* Jump::nextSegmentElement()
+EngravingItem* Jump::nextSegmentElement()
 {
     Segment* seg = measure()->last();
     return seg->firstElement(staffIdx());
@@ -271,7 +286,7 @@ Element* Jump::nextSegmentElement()
 //   prevSegmentElement
 //---------------------------------------------------------
 
-Element* Jump::prevSegmentElement()
+EngravingItem* Jump::prevSegmentElement()
 {
     return nextSegmentElement();
 }
@@ -282,6 +297,6 @@ Element* Jump::prevSegmentElement()
 
 QString Jump::accessibleInfo() const
 {
-    return QString("%1: %2").arg(Element::accessibleInfo(), this->jumpTypeUserName());
+    return QString("%1: %2").arg(EngravingItem::accessibleInfo(), this->jumpTypeUserName());
 }
 }

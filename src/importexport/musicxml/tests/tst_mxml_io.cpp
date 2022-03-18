@@ -24,7 +24,7 @@
 
 #include "testbase.h"
 
-#include "libmscore/score.h"
+#include "libmscore/masterscore.h"
 
 // start includes required for fixupScore()
 #include "libmscore/measure.h"
@@ -93,8 +93,8 @@ private slots:
     void barStyles() { mxmlIoTest("testBarStyles"); }
     void barStyles2() { mxmlIoTest("testBarStyles2"); }
     void barStyles3() { mxmlIoTest("testBarStyles3"); }
-    // void breaksImplExpl() { mxmlMscxExportTestRefBreaks("testBreaksImplExpl"); } fail after sync with 3.x
-    // void breaksMMRest() { mxmlMscxExportTestRefBreaks("testBreaksMMRest"); } fail after sync with 3.x
+    void breaksImplExpl() { mxmlMscxExportTestRefBreaks("testBreaksImplExpl"); }
+    void breaksMMRest() { mxmlMscxExportTestRefBreaks("testBreaksMMRest"); }
     // void breaksManual() { mxmlIoTestRefBreaks("testBreaksManual"); } fail after sync with 3.x
     // void breaksPage() { mxmlMscxExportTestRefBreaks("testBreaksPage"); } fail after sync with 3.x
     // void breaksSystem() { mxmlMscxExportTestRefBreaks("testBreaksSystem"); } fail after sync with 3.x
@@ -144,7 +144,7 @@ private slots:
     void incorrectStaffNumber1() { mxmlIoTestRef("testIncorrectStaffNumber1"); }
     void incorrectStaffNumber2() { mxmlIoTestRef("testIncorrectStaffNumber2"); }
     void instrumentChangeMIDIportExport() { mxmlMscxExportTestRef("testInstrumentChangeMIDIportExport"); }
-    //void instrumentSound() { mxmlIoTestRef("testInstrumentSound"); } fail XML parsing failed. (3) Opening and ending tag mismatch.
+    void instrumentSound() { mxmlIoTestRef("testInstrumentSound"); }
     void invalidTimesig() { mxmlIoTestRef("testInvalidTimesig"); }
     void invisibleElements() { mxmlIoTest("testInvisibleElements"); }
     void keysig1() { mxmlIoTest("testKeysig1"); }
@@ -159,7 +159,8 @@ private slots:
     void lyricsVoice2a() { mxmlIoTest("testLyricsVoice2a"); }
     void lyricsVoice2b() { mxmlIoTestRef("testLyricsVoice2b"); }
     void measureLength() { mxmlIoTestRef("testMeasureLength"); }
-    //void measureRepeats1() { mxmlIoTestRef("testMeasureRepeats1"); } fail libmscore/style.cpp Q_ASSERT(idx == textStyles[int(idx)].tid);
+    void measureNumbers() { mxmlIoTest("testMeasureNumbers"); }
+    void measureRepeats1() { mxmlIoTestRef("testMeasureRepeats1"); }
     //void measureRepeats2() { mxmlIoTestRef("testMeasureRepeats2"); } fail libmscore/style.cpp Q_ASSERT(idx == textStyles[int(idx)].tid);
     void measureRepeats3() { mxmlIoTest("testMeasureRepeats3"); }
     void midiPortExport() { mxmlMscxExportTestRef("testMidiPortExport"); }
@@ -232,7 +233,7 @@ private slots:
     void twoNoteTremoloTuplet() { mxmlIoTest("testTwoNoteTremoloTuplet"); }
     void uninitializedDivisions() { mxmlIoTestRef("testUninitializedDivisions"); }
     void unusualDurations() { mxmlIoTestRef("testUnusualDurations"); }
-    //void virtualInstruments() { mxmlIoTestRef("testVirtualInstruments"); } fail XML parsing failed. (3) Opening and ending tag mismatch.
+    void virtualInstruments() { mxmlIoTestRef("testVirtualInstruments"); }
     void voiceMapper1() { mxmlIoTestRef("testVoiceMapper1"); }
     void voiceMapper2() { mxmlIoTestRef("testVoiceMapper2"); }
     void voiceMapper3() { mxmlIoTestRef("testVoiceMapper3"); }
@@ -260,11 +261,11 @@ void TestMxmlIO::initTestCase()
 //   see mscore/file.cpp MuseScore::readScore(Score* score, QString name)
 //---------------------------------------------------------
 
-static void fixupScore(Score* score)
+static void fixupScore(MasterScore* score)
 {
     score->connectTies();
     score->masterScore()->rebuildMidiMapping();
-    score->setCreated(false);
+    score->setNewlyCreated(false);
     score->setSaved(false);
 }
 
@@ -282,7 +283,7 @@ void TestMxmlIO::mxmlIoTest(const char* file)
 {
     MScore::debugMode = true;
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
     setValue(PREF_IMPORT_MUSICXML_IMPORTBREAKS, Val(true));
     setValue(PREF_EXPORT_MUSICXML_EXPORTLAYOUT, Val(false));
     setValue(PREF_EXPORT_MUSICXML_EXPORTINVISIBLE, Val(true));
@@ -305,7 +306,7 @@ void TestMxmlIO::mxmlIoTestRef(const char* file)
 {
     MScore::debugMode = true;
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
     setValue(PREF_IMPORT_MUSICXML_IMPORTBREAKS, Val(true));
     setValue(PREF_EXPORT_MUSICXML_EXPORTINVISIBLE, Val(true));
 
@@ -337,17 +338,17 @@ void TestMxmlIO::mxmlIoTestRefBreaks(const char* file)
     fixupScore(score);
     score->doLayout();
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::No)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::No));
 
     QVERIFY(saveMusicXml(score, QString(file) + ".xml"));
     QVERIFY(saveCompareMusicXmlScore(score, QString(file) + ".xml", XML_IO_DATA_DIR + file + "_no_ref.xml"));
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
 
     QVERIFY(saveMusicXml(score, QString(file) + ".xml"));
     QVERIFY(saveCompareMusicXmlScore(score, QString(file) + ".xml", XML_IO_DATA_DIR + file + "_manual_ref.xml"));
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::All)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::All));
 
     QVERIFY(saveMusicXml(score, QString(file) + ".xml"));
     QVERIFY(saveCompareMusicXmlScore(score, QString(file) + ".xml", XML_IO_DATA_DIR + file + "_all_ref.xml"));
@@ -363,7 +364,7 @@ void TestMxmlIO::mxmlMscxExportTestRef(const char* file)
 {
     MScore::debugMode = true;
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
     setValue(PREF_EXPORT_MUSICXML_EXPORTLAYOUT, Val(false));
     setValue(PREF_EXPORT_MUSICXML_EXPORTINVISIBLE, Val(true));
 
@@ -386,7 +387,7 @@ void TestMxmlIO::mxmlMscxExportTestRefBreaks(const char* file)
 {
     MScore::debugMode = true;
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
     setValue(PREF_EXPORT_MUSICXML_EXPORTLAYOUT, Val(false));
     setValue(PREF_EXPORT_MUSICXML_EXPORTINVISIBLE, Val(true));
 
@@ -395,17 +396,17 @@ void TestMxmlIO::mxmlMscxExportTestRefBreaks(const char* file)
     fixupScore(score);
     score->doLayout();
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::No)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::No));
 
     QVERIFY(saveMusicXml(score, QString(file) + ".xml"));
     QVERIFY(saveCompareMusicXmlScore(score, QString(file) + ".xml", XML_IO_DATA_DIR + file + "_no_ref.xml"));
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
 
     QVERIFY(saveMusicXml(score, QString(file) + ".xml"));
     QVERIFY(saveCompareMusicXmlScore(score, QString(file) + ".xml", XML_IO_DATA_DIR + file + "_manual_ref.xml"));
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::All)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::All));
 
     QVERIFY(saveMusicXml(score, QString(file) + ".xml"));
     QVERIFY(saveCompareMusicXmlScore(score, QString(file) + ".xml", XML_IO_DATA_DIR + file + "_all_ref.xml"));
@@ -416,7 +417,7 @@ void TestMxmlIO::mxmlMscxExportTestRefInvisibleElements(const char* file)
 {
     MScore::debugMode = true;
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
     setValue(PREF_EXPORT_MUSICXML_EXPORTLAYOUT, Val(false));
 
     MasterScore* score = readScore(XML_IO_DATA_DIR + file + ".mscx");
@@ -446,7 +447,7 @@ void TestMxmlIO::mxmlReadTestCompr(const char* file)
 {
     MScore::debugMode = true;
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
     setValue(PREF_IMPORT_MUSICXML_IMPORTBREAKS, Val(true));
     setValue(PREF_EXPORT_MUSICXML_EXPORTINVISIBLE, Val(true));
 
@@ -470,7 +471,7 @@ void TestMxmlIO::mxmlReadWriteTestCompr(const char* file)
     // read xml
     MScore::debugMode = true;
 
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
     setValue(PREF_IMPORT_MUSICXML_IMPORTBREAKS, Val(true));
     setValue(PREF_EXPORT_MUSICXML_EXPORTINVISIBLE, Val(true));
 
@@ -500,7 +501,7 @@ void TestMxmlIO::mxmlReadWriteTestCompr(const char* file)
 void TestMxmlIO::mxmlImportTestRef(const char* file)
 {
     MScore::debugMode = false;
-    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(static_cast<int>(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual)));
+    setValue(PREF_EXPORT_MUSICXML_EXPORTBREAKS, Val(IMusicXmlConfiguration::MusicxmlExportBreaksType::Manual));
     setValue(PREF_EXPORT_MUSICXML_EXPORTLAYOUT, Val(false));
 
     MasterScore* score = readScore(XML_IO_DATA_DIR + file + ".xml");

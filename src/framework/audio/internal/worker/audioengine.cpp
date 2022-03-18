@@ -29,7 +29,6 @@
 #include "audioerrors.h"
 
 using namespace mu::audio;
-using namespace mu::audio::synth;
 
 AudioEngine* AudioEngine::instance()
 {
@@ -65,9 +64,6 @@ mu::Ret AudioEngine::init(IAudioBufferPtr bufferPtr)
 
     m_buffer = std::move(bufferPtr);
     m_buffer->setSource(m_mixer->mixedSource());
-
-    m_synthesizerController = std::make_shared<SynthesizerController>(synthesizersRegister(), soundFontsProvider());
-    m_synthesizerController->init();
 
     m_inited = true;
 

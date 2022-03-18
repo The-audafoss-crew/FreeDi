@@ -31,6 +31,13 @@
 #include <QGridLayout>
 #include <QDesktopServices>
 
+#ifdef Q_OS_MAC
+#include "platform/macos/macosinteractivehelper.h"
+#elif defined(Q_OS_WIN)
+#include <QDir>
+#include <QProcess>
+#endif
+
 #include "log.h"
 #include "translation.h"
 #include "io/path.h"
@@ -41,7 +48,7 @@ using namespace mu::framework;
 static IInteractive::Result standardDialogResult(const RetVal<Val>& retVal)
 {
     if (!retVal.ret) {
-        return IInteractive::Result();
+        return IInteractive::Result(static_cast<int>(IInteractive::Button::Cancel));
     }
 
     QVariantMap resultMap = retVal.val.toQVariant().toMap();
@@ -76,8 +83,8 @@ IInteractive::ButtonData Interactive::buttonData(Button b) const
     case IInteractive::Button::SaveAll:     return ButtonData(int(b), trc("ui", "Save All"));
     case IInteractive::Button::DontSave:    return ButtonData(int(b), trc("ui", "Don't save"));
     case IInteractive::Button::Open:        return ButtonData(int(b), trc("ui", "Open"));
-    case IInteractive::Button::Yes:         return ButtonData(int(b), trc("ui", "Yes"));
-    case IInteractive::Button::YesToAll:    return ButtonData(int(b), trc("ui", "Yes to All"));
+    case IInteractive::Button::Yes:         return ButtonData(int(b), trc("ui", "Yes"), accent);
+    case IInteractive::Button::YesToAll:    return ButtonData(int(b), trc("ui", "Yes to All"), accent);
     case IInteractive::Button::No:          return ButtonData(int(b), trc("ui", "No"));
     case IInteractive::Button::NoToAll:     return ButtonData(int(b), trc("ui", "No to All"));
     case IInteractive::Button::Abort:       return ButtonData(int(b), trc("ui", "Abort"));
@@ -90,6 +97,7 @@ IInteractive::ButtonData Interactive::buttonData(Button b) const
     case IInteractive::Button::Apply:       return ButtonData(int(b), trc("ui", "Apply"));
     case IInteractive::Button::Reset:       return ButtonData(int(b), trc("ui", "Reset"));
     case IInteractive::Button::RestoreDefaults: return ButtonData(int(b), trc("ui", "Restore Defaults"));
+    case IInteractive::Button::Continue:    return ButtonData(int(b), trc("ui", "Continue"));
     case IInteractive::Button::CustomButton: return ButtonData(int(b), "");
     }
 
@@ -151,25 +159,22 @@ io::path Interactive::selectDirectory(const QString& title, const io::path& dir)
 
 RetVal<Val> Interactive::open(const std::string& uri) const
 {
-    if (uri.find("sync=") != std::string::npos) {
-        return provider()->open(UriQuery(uri));
-    }
+    return open(UriQuery(uri));
+}
 
-    std::string newUri = uri;
-    if (newUri.find("?") == std::string::npos) {
-        newUri += "?";
-    } else {
-        newUri += "&";
-    }
-
-    newUri += "sync=true";
-
-    return provider()->open(UriQuery(newUri));
+RetVal<Val> Interactive::open(const Uri& uri) const
+{
+    return open(UriQuery(uri));
 }
 
 RetVal<Val> Interactive::open(const UriQuery& uri) const
 {
-    return provider()->open(uri);
+    UriQuery newQuery = uri;
+    if (!newQuery.contains("sync")) {
+        newQuery.addParam("sync", Val(true));
+    }
+
+    return provider()->open(newQuery);
 }
 
 RetVal<bool> Interactive::isOpened(const std::string& uri) const
@@ -180,6 +185,21 @@ RetVal<bool> Interactive::isOpened(const std::string& uri) const
 RetVal<bool> Interactive::isOpened(const Uri& uri) const
 {
     return provider()->isOpened(uri);
+}
+
+RetVal<bool> Interactive::isOpened(const UriQuery& uri) const
+{
+    return provider()->isOpened(uri);
+}
+
+async::Channel<Uri> Interactive::opened() const
+{
+    return provider()->opened();
+}
+
+void Interactive::raise(const UriQuery& uri)
+{
+    provider()->raise(uri);
 }
 
 void Interactive::close(const std::string& uri)
@@ -197,10 +217,35 @@ ValCh<Uri> Interactive::currentUri() const
     return provider()->currentUri();
 }
 
+std::vector<Uri> Interactive::stack() const
+{
+    return provider()->stack();
+}
+
 Ret Interactive::openUrl(const std::string& url) const
 {
-    QUrl _url(QString::fromStdString(url));
-    return QDesktopServices::openUrl(_url);
+    return openUrl(QUrl(QString::fromStdString(url)));
+}
+
+Ret Interactive::openUrl(const QUrl& url) const
+{
+    return QDesktopServices::openUrl(url);
+}
+
+Ret Interactive::revealInFileBrowser(const io::path& filePath) const
+{
+#ifdef Q_OS_MACOS
+    if (MacOSInteractiveHelper::revealInFinder(filePath)) {
+        return true;
+    }
+#elif defined(Q_OS_WIN)
+    QString command = QLatin1String("explorer /select,%1").arg(QDir::toNativeSeparators(filePath.toQString()));
+    if (QProcess::startDetached(command, QStringList())) {
+        return true;
+    }
+#endif
+    io::path dirPath = io::dirpath(filePath);
+    return openUrl(QUrl::fromLocalFile(dirPath.toQString()));
 }
 
 IInteractive::ButtonDatas Interactive::buttonDataList(const Buttons& buttons) const

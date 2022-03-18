@@ -20,8 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import QtQuick 2.15
-import QtQuick.Layouts 1.3
-import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.15
+import QtQuick.Controls 2.15
 
 import MuseScore.Ui 1.0
 import MuseScore.UiComponents 1.0
@@ -31,46 +31,35 @@ FocusScope {
     id: root
 
     property alias playlist: view.model
+    property color backgroundColor: ui.theme.backgroundPrimaryColor
 
     property alias navigation: navPanel
     property int sideMargin: 46
 
     signal requestOpenVideo(string videoId)
-    signal requestActiveFocus()
 
     NavigationPanel {
         id: navPanel
+        name: "Playlist"
+        enabled: root.enabled && root.visible
         direction: NavigationPanel.Both
     }
 
     Rectangle {
-        id: background
-        anchors.fill: parent
+        id: topGradient
 
-        color: ui.theme.backgroundSecondaryColor
-
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                root.requestActiveFocus()
-                root.forceActiveFocus()
-            }
-        }
-    }
-
-    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
         anchors.top: view.top
 
-        width: parent.width
         height: 8
         z: 1
 
         gradient: Gradient {
             GradientStop {
                 position: 0.0
-                color: background.color
+                color: root.backgroundColor
             }
-
             GradientStop {
                 position: 1.0
                 color: "transparent"
@@ -78,27 +67,26 @@ FocusScope {
         }
     }
 
-    GridView {
+    StyledGridView {
         id: view
 
+        readonly property int columns: Math.max(0, Math.floor(width / cellWidth))
+
+        visible: count > 0
         anchors.fill: parent
-        anchors.leftMargin: root.sideMargin - itemMargin
-        anchors.rightMargin: root.sideMargin - itemMargin
-        anchors.topMargin: -itemMargin
-        anchors.bottomMargin: -itemMargin
+        anchors.leftMargin: root.sideMargin - spacingBetweenColumns / 2
+        anchors.rightMargin: root.sideMargin - spacingBetweenColumns / 2
 
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
+        topMargin: topGradient.height
 
-        cellHeight: itemMargin + itemHeight + itemMargin
-        cellWidth: itemMargin + itemWidth + itemMargin
+        readonly property real spacingBetweenColumns: 50
+        readonly property real spacingBetweenRows: 24
 
-        property int itemMargin: 24
-        property int itemWidth: 250
-        property int itemHeight: 224
+        readonly property real actualCellWidth: 256
+        readonly property real actualCellHeight: 232
 
-        property int rows: Math.max(0, Math.floor(root.height / root.cellHeight))
-        property int columns: Math.max(0, Math.floor(root.width / root.cellWidth))
+        cellWidth: actualCellWidth + spacingBetweenColumns
+        cellHeight: actualCellHeight + spacingBetweenRows
 
         ScrollBar.vertical: StyledScrollBar {
             parent: root
@@ -106,7 +94,6 @@ FocusScope {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             anchors.right: parent.right
-            anchors.rightMargin: 16
 
             visible: view.contentHeight > view.height
             z: 1
@@ -117,14 +104,20 @@ FocusScope {
             width: view.cellWidth
 
             PlaylistItem {
-                anchors.centerIn: parent
+                width: view.actualCellWidth
+                height: view.actualCellHeight
 
-                width: view.itemWidth
-                height: view.itemHeight
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
 
                 navigation.panel: navPanel
-                navigation.row: root.columns === 0 ? 0 : Math.floor(model.index / root.columns)
-                navigation.column: model.index - (navigation.row * root.columns)
+                navigation.row: view.columns === 0 ? 0 : Math.floor(model.index / view.columns)
+                navigation.column: model.index - (navigation.row * view.columns)
+                navigation.onActiveChanged: {
+                    if (navigation.active) {
+                        view.positionViewAtIndex(index, ListView.Contain)
+                    }
+                }
 
                 title: modelData.title
                 author: modelData.author
@@ -135,6 +128,31 @@ FocusScope {
                     root.requestOpenVideo(modelData.videoId)
                 }
             }
+        }
+    }
+
+    Column {
+        id: errorMessageColumn
+        visible: !view.visible
+
+        anchors.top: parent.top
+        anchors.topMargin: topGradient.height + Math.max(parent.height / 4 - height / 2, 0)
+        anchors.left: parent.left
+        anchors.leftMargin: root.sideMargin
+        anchors.right: parent.right
+        anchors.rightMargin: root.sideMargin
+
+        spacing: 6
+
+        StyledTextLabel {
+            width: parent.width
+            font: ui.theme.tabBoldFont
+            text: qsTrc("learn", "Sorry, we are unable to load these videos right now")
+        }
+
+        StyledTextLabel {
+            width: parent.width
+            text: qsTrc("learn", "Please check your internet connection or try again later.")
         }
     }
 }

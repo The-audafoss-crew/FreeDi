@@ -25,7 +25,15 @@
 #include "ret.h"
 #include "translation.h"
 #include "io/path.h"
-#include "libmscore/score.h"
+#include "libmscore/masterscore.h"
+#include "engraving/engravingerrors.h"
+
+namespace mu {
+inline Ret make_ret(engraving::Err e)
+{
+    return Ret(static_cast<int>(e));
+}
+}
 
 namespace mu::notation {
 // 1000 - 1299
@@ -52,8 +60,15 @@ enum class Err {
     // notation
     NoScore = 1030,
 
-    //playback
+    NoteOrRestIsNotSelected,
+    NoteOrFiguredBassIsNotSelected,
+    MeasureIsNotSelected,
+
+    // playback
     UnableToPlaybackElement = 1040,
+
+    // selection
+    EmptySelection = 1050,
 };
 
 inline Ret make_ret(Err err, const io::path& filePath = "")
@@ -87,14 +102,12 @@ inline Ret make_ret(Err err, const io::path& filePath = "")
                                 "You can convert this score by opening and then\n"
                                 "saving with MuseScore version 2.x.\n"
                                 "Visit the %1MuseScore download page%2 to obtain such a 2.x version.")
-               .arg("<a href=\"https://musescore.org/download#older-versions\">")
-               .arg("</a>");
+               .arg("<a href=\"https://musescore.org/download#older-versions\">", "</a>");
         break;
     case Err::FileTooNew:
         text = qtrc("notation", "This score was saved using a newer version of MuseScore.\n "
                                 "Visit the %1MuseScore website%2 to obtain the latest version.")
-               .arg("<a href=\"https://musescore.org\">")
-               .arg("</a>");
+               .arg("<a href=\"https://musescore.org\">", "</a>");
         break;
     case Err::FileOld300Format:
         text = qtrc("notation", "It was last saved with a developer version of 3.0.");
@@ -110,8 +123,20 @@ inline Ret make_ret(Err err, const io::path& filePath = "")
     case Err::NoScore:
         text = qtrc("notation", "No score");
         break;
+    case Err::NoteOrRestIsNotSelected:
+        text = qtrc("notation", "No note or rest selected: Please select a note or rest and retry");
+        break;
+    case Err::NoteOrFiguredBassIsNotSelected:
+        text = qtrc("notation", "No note or figured bass selected: Please select a note or figured bass and retry");
+        break;
+    case Err::MeasureIsNotSelected:
+        text = qtrc("notation", "No measure selected: Please select a measure and retry");
+        break;
     case Err::UnableToPlaybackElement:
         text = qtrc("notation", "Unable to playback element");
+        break;
+    case Err::EmptySelection:
+        text = qtrc("notation", "The selection is empty");
         break;
     case Err::Undefined:
     case Err::NoError:

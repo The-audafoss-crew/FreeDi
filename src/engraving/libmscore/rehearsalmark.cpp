@@ -37,15 +37,44 @@ static const ElementStyle rehearsalMarkStyle {
     { Sid::rehearsalMarkMinDistance, Pid::MIN_DISTANCE },
 };
 
+static const ElementStyle mainRehearsalMarkStyle {
+    { Sid::rehearsalMarkFrameType, Pid::FRAME_TYPE },
+    { Sid::rehearsalMarkFontSize, Pid::FONT_SIZE },
+    { Sid::rehearsalMarkAlign, Pid::ALIGN },
+};
+
+static const ElementStyle additionalRehearsalMarkStyle {
+    { Sid::tempoFrameType, Pid::FRAME_TYPE },
+    { Sid::tempoFontSize, Pid::FONT_SIZE },
+    { Sid::tempoAlign, Pid::ALIGN },
+};
+
 //---------------------------------------------------------
 //   RehearsalMark
 //---------------------------------------------------------
 
-RehearsalMark::RehearsalMark(Score* s)
-    : TextBase(s, Tid::REHEARSAL_MARK)
+RehearsalMark::RehearsalMark(Segment* parent)
+    : TextBase(ElementType::REHEARSAL_MARK, parent, TextStyleType::REHEARSAL_MARK, ElementFlag::ON_STAFF)
 {
     initElementStyle(&rehearsalMarkStyle);
     setSystemFlag(true);
+}
+
+//---------------------------------------------------------
+//   setType
+//---------------------------------------------------------
+
+void RehearsalMark::setType(RehearsalMark::Type type)
+{
+    if (type == _type) {
+        return;
+    }
+    _type = type;
+
+    const auto& elemStyleMap = (_type == Type::Main ? mainRehearsalMarkStyle : additionalRehearsalMarkStyle);
+    for (const auto& elem : elemStyleMap) {
+        setProperty(elem.pid, score()->styleV(elem.sid));
+    }
 }
 
 //---------------------------------------------------------
@@ -76,13 +105,13 @@ void RehearsalMark::layout()
             } else {
                 // header at start of system
                 // align to a point just after the header
-                Element* e = header->element(track());              // TODO: firstVisibleStaff
+                EngravingItem* e = header->element(track());
                 qreal w = e ? e->width() : header->width();
                 rxpos() = header->x() + w - s->x();
 
                 // special case for right aligned rehearsal marks at start of system
                 // left align with start of measure if that is further left
-                if (align() & Align::RIGHT) {
+                if (align() == AlignH::RIGHT) {
                     rxpos() = qMin(rpos().x(), measureX + width());
                 }
             }
@@ -95,11 +124,11 @@ void RehearsalMark::layout()
 //   propertyDefault
 //---------------------------------------------------------
 
-QVariant RehearsalMark::propertyDefault(Pid id) const
+engraving::PropertyValue RehearsalMark::propertyDefault(Pid id) const
 {
     switch (id) {
-    case Pid::SUB_STYLE:
-        return int(Tid::REHEARSAL_MARK);
+    case Pid::TEXT_STYLE:
+        return TextStyleType::REHEARSAL_MARK;
     case Pid::PLACEMENT:
         return score()->styleV(Sid::rehearsalMarkPlacement);
     default:

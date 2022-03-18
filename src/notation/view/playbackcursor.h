@@ -24,7 +24,7 @@
 
 #include "modularity/ioc.h"
 #include "notation/inotationconfiguration.h"
-#include "draw/geometry.h"
+#include "engraving/infrastructure/draw/geometry.h"
 
 class QColor;
 
@@ -41,10 +41,11 @@ public:
     const RectF& rect() const;
     void setRect(const RectF& rect);
 
+    bool visible() const;
     void setVisible(bool arg);
 
 private:
-    QColor color();
+    QColor color() const;
 
     bool m_visible = false;
     RectF m_rect;

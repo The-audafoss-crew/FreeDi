@@ -21,13 +21,13 @@
  */
 #include "braillemodule.h"
 
-#include "log.h"
 #include "modularity/ioc.h"
+#include "project/inotationwritersregister.h"
 
-#include "notation/inotationwritersregister.h"
+#include "internal/braillewriter.h"
 
 using namespace mu::iex::braille;
-using namespace mu::notation;
+using namespace mu::project;
 
 std::string BrailleModule::moduleName() const
 {
@@ -38,5 +38,6 @@ void BrailleModule::resolveImports()
 {
     auto writers = modularity::ioc()->resolve<INotationWritersRegister>(moduleName());
     if (writers) {
+        writers->reg({ "brf" }, std::make_shared<BrailleWriter>());
     }
 }

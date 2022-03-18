@@ -20,9 +20,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import QtQuick 2.15
-import QtQuick.Controls 2.0
-import QtQuick.Controls 1.5
-import QtQuick.Layouts 1.3
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
 
 import MuseScore.UiComponents 1.0
 import MuseScore.Ui 1.0
@@ -62,6 +61,7 @@ Rectangle {
                     { textRole: "StyledPopup", componentRole: popupSample },
                     { textRole: "StyledPopupView", componentRole: styledPopupViewComponent },
                     { textRole: "StyledMenu", componentRole: styledMenuComponent },
+                    { textRole: "StyledMenuScrollable", componentRole: styledScrollableMenuComponent },
                     { textRole: "CheckBox", componentRole: checkBoxSample },
                     { textRole: "VisibilityBox", componentRole: visibilityBoxSample },
                     { textRole: "ColorPicker", componentRole: colorPickerSample },
@@ -76,8 +76,8 @@ Rectangle {
                     { textRole: "TextInputField", componentRole: textInputFieldSample },
                     { textRole: "SearchField", componentRole: searchFieldSample },
                     { textRole: "FilePicker", componentRole: filePickerSample },
-                    { textRole: "TabPanel", componentRole: tabPanelSample },
-                    { textRole: "GradientTabButton", componentRole: gradientTabButtonsSample },
+                    { textRole: "StyledTabBar", componentRole: tabBarSample },
+                    { textRole: "PageTabButton", componentRole: pageTabButtonsSample },
                     { textRole: "GridView", componentRole: gridViewVertical },
                     { textRole: "StyledSlider", componentRole: slidersSample },
                     { textRole: "NumberInputField", componentRole: numberInputFieldSample },
@@ -288,23 +288,23 @@ Rectangle {
 
                 onClicked: {
                     var _subitems = [
-                                {code: "2", icon: IconCode.PAGE, title: "first action", enabled: true},
-                                {code: "3", icon: IconCode.PAGE, title: "with subitems", enabled: true, subitems: [
-                                        {code: "4", title: "first action", enabled: true, selectable: true},
-                                        {code: "5", title: "second action", enabled: true, selectable: true, selected: true},
-                                        {code: "6", title: "third action", enabled: true, selectable: true},
+                                {id: "2", icon: IconCode.PAGE, title: "first action", enabled: true},
+                                {id: "3", icon: IconCode.PAGE, title: "with subitems", enabled: true, subitems: [
+                                        {id: "4", title: "first action", enabled: true, selectable: true},
+                                        {id: "5", title: "second action", enabled: true, selectable: true, selected: true},
+                                        {id: "6", title: "third action", enabled: true, selectable: true},
                                         {},
-                                        {code: "7", title: "clear"}
+                                        {id: "7", title: "clear"}
                                     ]}
                             ]
 
                     var items = [
-                                {code: "0", icon: IconCode.PAGE, title: "enabled action", enabled: true},
-                                {code: "1", icon: IconCode.AMBITUS, title: "with subitems", enabled: true, shortcut: "Ctrl+A", subitems: _subitems },
+                                {id: "00", icon: IconCode.PAGE, title: "enabled action", enabled: true},
+                                {id: "01", icon: IconCode.AMBITUS, title: "with subitems", enabled: true, shortcut: "Ctrl+A", subitems: _subitems },
                                 {},
-                                {code: "5", title: "with shortcut", enabled: true, shortcut: "Ctrl+Shift+G"},
-                                {code: "6", icon: IconCode.PAGE, title: "disabled action", enabled: false},
-                                {code: "7", icon: IconCode.CLEF_BASS, title: "checkable action", enabled: true, checkable: true, checked: true}
+                                {id: "02", title: "with shortcut", enabled: true, shortcut: "Ctrl+Shift+G"},
+                                {id: "03", icon: IconCode.PAGE, title: "disabled action", enabled: false},
+                                {id: "04", icon: IconCode.CLEF_BASS, title: "checkable action", enabled: true, checkable: true, checked: true}
                             ]
 
                     menuLoader.toggleOpened(items)
@@ -312,8 +312,39 @@ Rectangle {
 
                 StyledMenuLoader {
                     id: menuLoader
-                    onHandleAction: {
-                        console.log("selected " + actionCode + " index " + actionIndex)
+
+                    onHandleMenuItem: function(itemId) {
+                        console.log("selected " + itemId)
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: styledScrollableMenuComponent
+
+        Row {
+            spacing: 12
+
+            FlatButton {
+                text: "Show Scrollable Menu"
+
+                onClicked: {
+                    var items = []
+
+                    for (var i = 0; i < 100; i++) {
+                        items.push({id: i, icon: IconCode.PAGE, title: "some action", enabled: true})
+                    }
+
+                    menuLoader.toggleOpened(items)
+                }
+
+                StyledMenuLoader {
+                    id: menuLoader
+
+                    onHandleMenuItem: function(itemId) {
+                        console.log("selected " + itemId)
                     }
                 }
             }
@@ -359,7 +390,7 @@ Rectangle {
 
             color: "black"
 
-            onNewColorSelected: {
+            onNewColorSelected: function(newColor) {
                 color = newColor
             }
         }
@@ -393,20 +424,16 @@ Rectangle {
 
         Column {
             spacing: 8
-
             width: 200
 
             FlatButton {
                 icon: IconCode.SAVE
-
                 text: "Text with icon"
             }
 
             FlatButton {
                 icon: IconCode.SAVE
-
                 text: "Text with icon"
-
                 orientation: Qt.Horizontal
             }
 
@@ -420,20 +447,15 @@ Rectangle {
 
             FlatButton {
                 icon: IconCode.SAVE
-
-                accentButton: true
-
                 text: "Accent button"
+                accentButton: true
             }
 
             FlatButton {
                 icon: IconCode.SAVE
-
-                normalStateColor: "transparent"
-
-                text: "Transparent button"
+                text: "Flat button"
+                transparent: true
             }
-
         }
     }
 
@@ -441,20 +463,22 @@ Rectangle {
         id: progressButtonSample
 
         ProgressButton {
+            id: progressButton
+
+            to: 100
+            progressStatus: "Processing..."
+
             Timer {
                 id: timer
 
                 interval: 1000
                 repeat: true
 
-                property int progress: 0
-
                 onTriggered: {
-                    progress += 10
-                    parent.setProgress(progress + "/100", false, progress, 100)
+                    progressButton.value += 10
 
-                    if (progress === 100) {
-                        progress = 0
+                    if (progressButton.value === 100) {
+                        progressButton.value = 0
                         stop()
                     }
                 }
@@ -479,12 +503,12 @@ Rectangle {
             RadioButtonGroup {
                 id: iconButtonList
 
-                property var currentValue: -1
+                property int currentValue: -1
 
                 height: 30
 
                 model: [
-                    { iconRole: IconCode.AUTO, valueRole: 0 },
+                    { iconRole: IconCode.SETTINGS_COG, valueRole: 0 },
                     { iconRole: IconCode.ARROW_DOWN, valueRole: 1 },
                     { iconRole: IconCode.ARROW_UP, valueRole: 2 }
                 ]
@@ -492,14 +516,11 @@ Rectangle {
                 delegate: FlatRadioButton {
                     ButtonGroup.group: iconButtonList.radioButtonGroup
 
-                    checked: iconButtonList.currentValue === modelData["valueRole"]
+                    iconCode: modelData["iconRole"]
 
+                    checked: iconButtonList.currentValue === modelData["valueRole"]
                     onToggled: {
                         iconButtonList.currentValue = modelData["valueRole"]
-                    }
-
-                    StyledIconLabel {
-                        iconCode: modelData["iconRole"]
                     }
                 }
             }
@@ -507,7 +528,7 @@ Rectangle {
             RadioButtonGroup {
                 id: textButtonList
 
-                property var currentValue: -1
+                property int currentValue: -1
 
                 height: 30
 
@@ -520,14 +541,11 @@ Rectangle {
                 delegate: FlatRadioButton {
                     ButtonGroup.group: textButtonList.radioButtonGroup
 
-                    checked: textButtonList.currentValue === modelData["valueRole"]
+                    text: modelData["textRole"]
 
+                    checked: textButtonList.currentValue === modelData["valueRole"]
                     onToggled: {
                         textButtonList.currentValue = modelData["valueRole"]
-                    }
-
-                    StyledTextLabel {
-                        text: modelData["textRole"]
                     }
                 }
             }
@@ -563,22 +581,20 @@ Rectangle {
             width: 200
 
             IncrementalPropertyControl {
-                iconMode: iconModeEnum.hidden
-
                 currentValue: 0
 
                 maxValue: 999
                 minValue: 0
                 step: 0.5
 
-                onValueEdited: {
+                onValueEdited: function(newValue) {
                     currentValue = newValue
                 }
             }
 
             IncrementalPropertyControl {
                 icon: IconCode.AUDIO
-                iconMode: iconModeEnum.right
+                iconMode: IncrementalPropertyControl.Right
 
                 currentValue: 0
 
@@ -586,14 +602,13 @@ Rectangle {
                 minValue: 0
                 step: 0.5
 
-                onValueEdited: {
+                onValueEdited: function(newValue) {
                     currentValue = newValue
                 }
             }
 
             IncrementalPropertyControl {
                 icon: IconCode.AUDIO
-                iconMode: iconModeEnum.left
 
                 currentValue: 0
 
@@ -601,7 +616,7 @@ Rectangle {
                 minValue: 0
                 step: 0.5
 
-                onValueEdited: {
+                onValueEdited: function(newValue) {
                     currentValue = newValue
                 }
             }
@@ -707,72 +722,63 @@ Rectangle {
     }
 
     Component {
-        id: tabPanelSample
+        id: tabBarSample
 
-        TabPanel {
-            id: tabPanel
-
-            height: 40
+        Column {
             width: 200
+            spacing: 0
 
-            Tab {
-                id: firstTab
+            StyledTabBar {
+                id: tabBar
+                width: parent.width
+                spacing: 12
 
-                title: "Tab 1"
+                StyledTabButton {
+                    fillWidth: true
+                    text: "Tab 1"
+                }
 
-                Rectangle {
-                    anchors.top: parent.top
-                    anchors.topMargin: 4
+                StyledTabButton {
+                    fillWidth: true
+                    text: "Tab 2"
+                }
 
-                    height: 40
-                    width: tabPanel.width
-
-                    color: "blue"
+                StyledTabButton {
+                    fillWidth: true
+                    text: "Tab 3"
                 }
             }
 
-            Tab {
-                id: secondTab
-
-                title: "Tab 2"
+            StackLayout {
+                width: parent.width
+                currentIndex: tabBar.currentIndex
 
                 Rectangle {
-                    anchors.top: parent.top
-                    anchors.topMargin: 4
-
                     height: 40
-                    width: tabPanel.width
-
-                    color: "gray"
+                    color: "lightblue"
                 }
-            }
-
-            Tab {
-                id: thirdTab
-
-                title: "Tab 3"
 
                 Rectangle {
-                    anchors.top: parent.top
-                    anchors.topMargin: 4
-
                     height: 40
-                    width: tabPanel.width
+                    color: "lightgreen"
+                }
 
-                    color: "black"
+                Rectangle {
+                    height: 40
+                    color: "orange"
                 }
             }
         }
     }
 
     Component {
-        id: gradientTabButtonsSample
+        id: pageTabButtonsSample
 
         Row {
             spacing: 30
 
             Column {
-                GradientTabButton {
+                PageTabButton {
                     title: "Tab 1"
 
                     orientation: Qt.Horizontal
@@ -786,7 +792,7 @@ Rectangle {
                     checked: true
                 }
 
-                GradientTabButton {
+                PageTabButton {
                     title: "Tab 2"
 
                     width: 200
@@ -794,7 +800,7 @@ Rectangle {
                     orientation: Qt.Horizontal
                 }
 
-                GradientTabButton {
+                PageTabButton {
                     title: "Tab 3"
 
                     width: 200
@@ -804,7 +810,7 @@ Rectangle {
             }
 
             Column {
-                GradientTabButton {
+                PageTabButton {
                     title: "Tab 1"
 
                     width: 200
@@ -816,13 +822,13 @@ Rectangle {
                     checked: true
                 }
 
-                GradientTabButton {
+                PageTabButton {
                     title: "Tab 2"
 
                     width: 200
                 }
 
-                GradientTabButton {
+                PageTabButton {
                     title: "Tab 3"
 
                     width: 200

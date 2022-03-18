@@ -23,10 +23,11 @@
 
 #include "importmidi_inner.h"
 #include "importmidi_beat.h"
-#include "libmscore/score.h"
+#include "libmscore/masterscore.h"
 #include "libmscore/measure.h"
 #include "libmscore/tempo.h"
 #include "libmscore/tempotext.h"
+#include "libmscore/factory.h"
 #include "importmidi_operations.h"
 
 namespace Ms {
@@ -75,11 +76,6 @@ void setTempoToScore(Score* score, int tick, double beatsPerSecond)
     if (data->trackOpers.showTempoText.value()) {
         const int tempoInBpm = qRound(beatsPerSecond * 60.0);
 
-        TempoText* tempoText = new TempoText(score);
-        tempoText->setTempo(beatsPerSecond);
-        tempoText->setXmlText(QString("<sym>metNoteQuarterUp</sym> = %1").arg(tempoInBpm));
-        tempoText->setTrack(0);
-
         Measure* measure = score->tick2measure(Fraction::fromTicks(tick));
         if (!measure) {
             qDebug("MidiTempo::setTempoToScore: no measure for tick %d", tick);
@@ -90,6 +86,11 @@ void setTempoToScore(Score* score, int tick, double beatsPerSecond)
             qDebug("MidiTempo::setTempoToScore: no chord/rest segment for tempo at %d", tick);
             return;
         }
+
+        TempoText* tempoText = mu::engraving::Factory::createTempoText(segment);
+        tempoText->setTempo(beatsPerSecond);
+        tempoText->setXmlText(QString("<sym>metNoteQuarterUp</sym> = %1").arg(tempoInBpm));
+        tempoText->setTrack(0);
         segment->add(tempoText);
         data->hasTempoText = true;          // to show tempo text column in the MIDI import panel
     }
@@ -104,7 +105,7 @@ void applyAllTempoEvents(const std::multimap<int, MTrack>& tracks, Score* score)
 {
     for (const auto& track: tracks) {
         if (track.second.isDivisionInTps) {         // ticks per second
-            const double ticksPerBeat = MScore::division;
+            const double ticksPerBeat = Constant::division;
             const double beatsPerSecond = roundToBpm(track.second.division / ticksPerBeat);
             setTempoToScore(score, 0, beatsPerSecond);
         } else {        // beats per second
@@ -144,7 +145,7 @@ void setTempo(const std::multimap<int, MTrack>& tracks, Score* score)
         int counter = 0;
         auto it = beats.begin();
         auto beatStart = *it;
-        const auto newBeatLen = ReducedFraction::fromTicks(MScore::division);
+        const auto newBeatLen = ReducedFraction::fromTicks(Constant::division);
 
         for (++it; it != beats.end(); ++it) {
             const auto& beatEnd = *it;

@@ -24,6 +24,9 @@
 #define MU_NOTATION_INOTATIONACCESSIBILITY_H
 
 #include "retval.h"
+#include "notationtypes.h"
+
+#include "engraving/accessibility/accessibleroot.h"
 
 namespace mu::notation {
 class INotationAccessibility
@@ -32,6 +35,8 @@ public:
     virtual ~INotationAccessibility() = default;
 
     virtual ValCh<std::string> accessibilityInfo() const = 0;
+
+    virtual void setMapToScreenFunc(const mu::engraving::AccessibleMapToScreenFunc& func) = 0;
 };
 
 using INotationAccessibilityPtr = std::shared_ptr<INotationAccessibility>;

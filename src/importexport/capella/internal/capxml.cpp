@@ -30,7 +30,7 @@
 #include <cmath>
 #include <QRegularExpression>
 
-#include "libmscore/score.h"
+#include "libmscore/masterscore.h"
 #include "thirdparty/qzip/qzipreader_p.h"
 #include "capella.h"
 
@@ -387,7 +387,7 @@ void ChordObj::readCapx(XmlReader& e)
     rightTie     = false;
     beamShift    = 0;
     beamSlope    = 0;
-    beamMode      = BeamMode::AUTO;
+    beamMode      = CapBeamMode::AUTO;
     notationStave = 0;
 
     while (e.readNextStartElement()) {
@@ -505,9 +505,9 @@ void ChordObj::readCapxNotes(XmlReader& e)
             n.explAlteration = 0;
             n.headType = 0;
             if (shape == "none") {
-                n.headGroup = int(NoteHead::Group::HEAD_CROSS);
+                n.headGroup = int(NoteHeadGroup::HEAD_CROSS);
             } else {
-                n.headGroup = int(NoteHead::Group::HEAD_NORMAL);
+                n.headGroup = int(NoteHeadGroup::HEAD_NORMAL);
             }
             n.alteration = istep;
             n.silent = 0;
@@ -911,7 +911,7 @@ void Capella::readCapxSystem(XmlReader& e)
     s->bBarCountReset = 0;
     s->explLeftIndent = 0;   // ?? TODO ?? use in capella.cpp commented out
 
-    s->beamMode = BeamMode::AUTO;
+    s->beamMode = CapBeamMode::AUTO;
     s->tempo    = 0;
     s->color    = Qt::black;
 

@@ -29,8 +29,6 @@ import "internal"
 PreferencesPage {
     id: root
 
-    contentHeight: content.height
-
     IOPreferencesModel {
         id: ioModel
     }
@@ -40,47 +38,56 @@ PreferencesPage {
     }
 
     Column {
-        id: content
-
         width: parent.width
-        spacing: 24
+        spacing: root.sectionsSpacing
 
-        readonly property int firstColumnWidth: 220
-
+        /*
+         * TODO: https://github.com/musescore/MuseScore/issues/9807
         AudioApiSection {
             currentAudioApiIndex: ioModel.currentAudioApiIndex
             audioApiList: ioModel.audioApiList()
-            firstColumnWidth: content.firstColumnWidth
 
-            onCurrentAudioApiIndexChangeRequested: {
+            navigation.section: root.navigationSection
+            navigation.order: root.navigationOrderStart + 1
+
+            onCurrentAudioApiIndexChangeRequested: function(newIndex) {
                 ioModel.currentAudioApiIndex = newIndex
             }
         }
 
         SeparatorLine {}
+         */
 
         MidiDevicesSection {
             currentInputDeviceIndex: ioModel.currentMidiInputDeviceIndex
             currentOutputDeviceIndex: ioModel.currentMidiOutputDeviceIndex
             inputDevices: ioModel.midiInputDevices
             outputDevices: ioModel.midiOutputDevices
-            firstColumnWidth: content.firstColumnWidth
 
-            onCurrentInputDeviceIndexChangeRequested: {
+            navigation.section: root.navigationSection
+            navigation.order: root.navigationOrderStart + 2
+
+            onCurrentInputDeviceIndexChangeRequested: function(newIndex) {
                 ioModel.currentMidiInputDeviceIndex = newIndex
             }
 
-            onCurrentOuputDeviceIndexChangeRequested: {
+            onCurrentOuputDeviceIndexChangeRequested: function(newIndex) {
                 ioModel.currentMidiOutputDeviceIndex = newIndex
             }
         }
 
+        /*
+         * TODO: https://github.com/musescore/MuseScore/issues/9807
         SeparatorLine {}
 
         AudioEngineSection {
+            navigation.section: root.navigationSection
+            navigation.order: root.navigationOrderStart + 3
+
             onRestartAudioAndMidiDevicesRequested: {
                 ioModel.restartAudioAndMidiDevices()
             }
         }
+         */
     }
 }

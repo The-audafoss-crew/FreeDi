@@ -35,6 +35,14 @@ MidiPortDevModel::MidiPortDevModel(QObject* parent)
         m_inputEvents.prepend(str);
         emit inputEventsChanged();
     });
+
+    midiInPort()->devicesChanged().onNotify(this, [this]() {
+        emit inputDevicesChanged();
+    });
+
+    midiOutPort()->devicesChanged().onNotify(this, [this]() {
+        emit outputDevicesChanged();
+    });
 }
 
 QVariantList MidiPortDevModel::outputDevices() const
@@ -95,7 +103,6 @@ QVariantList MidiPortDevModel::inputDevices() const
 void MidiPortDevModel::inputDeviceAction(const QString& deviceID, const QString& action)
 {
     LOGI() << "deviceID: " << deviceID << ", action: " << action;
-    midiInPort()->stop();
     midiInPort()->disconnect();
 
     if (action == "Connect") {
@@ -103,14 +110,6 @@ void MidiPortDevModel::inputDeviceAction(const QString& deviceID, const QString&
         if (!ret) {
             LOGE() << "failed connect, deviceID: " << deviceID << ", err: " << ret.text();
             m_connectionErrors[deviceID] = QString::fromStdString(ret.text());
-        }
-
-        if (ret) {
-            ret = midiInPort()->run();
-            if (!ret) {
-                LOGE() << "failed connect, deviceID: " << deviceID << ", err: " << ret.text();
-                m_connectionErrors[deviceID] = QString::fromStdString(ret.text());
-            }
         }
     }
 
@@ -195,6 +194,8 @@ void MidiPortDevModel::generateMIDI20()
             e.setData(++data);
         }
 
+        midiOutPort()->sendEvent(e);
+
         QString str = QString::fromStdString(e.to_string());
         QString str2 = "";
 
@@ -208,21 +209,4 @@ void MidiPortDevModel::generateMIDI20()
         m_inputEvents.prepend(str);
     }
     emit inputEventsChanged();
-}
-
-void MidiPortDevModel::stopInput()
-{
-    midiInPort()->stop();
-    emit isInputRunningChanged();
-}
-
-void MidiPortDevModel::runInput()
-{
-    midiInPort()->run();
-    emit isInputRunningChanged();
-}
-
-bool MidiPortDevModel::isInputRunning() const
-{
-    return midiInPort()->isRunning();
 }

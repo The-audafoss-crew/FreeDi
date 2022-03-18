@@ -22,44 +22,65 @@
 
 #include "notationswitchlistmodel.h"
 
+#include "log.h"
+
 using namespace mu::notation;
+using namespace mu::project;
 
 NotationSwitchListModel::NotationSwitchListModel(QObject* parent)
     : QAbstractListModel(parent)
 {
+    m_notationChangedReceiver = std::make_unique<async::Asyncable>();
 }
 
 void NotationSwitchListModel::load()
 {
+    TRACEFUNC;
+
+    onCurrentProjectChanged();
+    context()->currentProjectChanged().onNotify(m_notationChangedReceiver.get(), [this]() {
+        onCurrentProjectChanged();
+    });
+
+    onCurrentNotationChanged();
+    context()->currentNotationChanged().onNotify(m_notationChangedReceiver.get(), [this]() {
+        onCurrentNotationChanged();
+    });
+}
+
+void NotationSwitchListModel::onCurrentProjectChanged()
+{
+    disconnectAll();
+
     loadNotations();
 
-    context()->currentMasterNotationChanged().onNotify(this, [this]() {
+    INotationProjectPtr project = context()->currentProject();
+    if (!project) {
+        return;
+    }
+
+    project->masterNotation()->excerpts().ch.onReceive(this, [this](ExcerptNotationList) {
         loadNotations();
-
-        if (!masterNotation()) {
-            return;
-        }
-
-        masterNotation()->excerpts().ch.onReceive(this, [this](ExcerptNotationList) {
-            loadNotations();
-        });
-
-        listenNotationSavingStatus(masterNotation());
     });
 
-    context()->currentNotationChanged().onNotify(this, [this]() {
-        INotationPtr notation = context()->currentNotation();
-        if (!notation) {
-            return;
-        }
+    listenProjectSavingStatusChanged();
+}
 
-        int currentNotationIndex = m_notations.indexOf(notation);
-        emit currentNotationIndexChanged(currentNotationIndex);
-    });
+void NotationSwitchListModel::onCurrentNotationChanged()
+{
+    INotationPtr notation = context()->currentNotation();
+    if (!notation) {
+        return;
+    }
+
+    int currentNotationIndex = m_notations.indexOf(notation);
+    emit currentNotationIndexChanged(currentNotationIndex);
 }
 
 void NotationSwitchListModel::loadNotations()
 {
+    TRACEFUNC;
+
     beginResetModel();
     m_notations.clear();
 
@@ -71,22 +92,36 @@ void NotationSwitchListModel::loadNotations()
 
     m_notations << masterNotation->notation();
     listenNotationOpeningStatus(masterNotation->notation());
+    listenNotationTitleChanged(masterNotation->notation());
 
     for (IExcerptNotationPtr excerpt: masterNotation->excerpts().val) {
-        if (excerpt->notation()->opened().val) {
+        if (excerpt->notation()->isOpen()) {
             m_notations << excerpt->notation();
         }
 
         listenNotationOpeningStatus(excerpt->notation());
+        listenNotationTitleChanged(excerpt->notation());
     }
 
     endResetModel();
+
+    if (!m_notations.contains(context()->currentNotation())) {
+        constexpr int MASTER_NOTATION_INDEX = 0;
+        setCurrentNotation(MASTER_NOTATION_INDEX);
+    }
 }
 
 void NotationSwitchListModel::listenNotationOpeningStatus(INotationPtr notation)
 {
-    notation->opened().ch.onReceive(this, [this, notation](bool opened) {
-        if (opened) {
+    INotationWeakPtr weakNotationPtr = notation;
+
+    notation->openChanged().onNotify(this, [this, weakNotationPtr]() {
+        INotationPtr notation = weakNotationPtr.lock();
+        if (!notation) {
+            return;
+        }
+
+        if (notation->isOpen()) {
             if (m_notations.contains(notation)) {
                 return;
             }
@@ -103,12 +138,49 @@ void NotationSwitchListModel::listenNotationOpeningStatus(INotationPtr notation)
     });
 }
 
-void NotationSwitchListModel::listenNotationSavingStatus(IMasterNotationPtr masterNotation)
+void NotationSwitchListModel::listenNotationTitleChanged(INotationPtr notation)
 {
-    masterNotation->needSave().notification.onNotify(this, [this, masterNotation]() {
-        int index = m_notations.indexOf(masterNotation->notation());
+    INotationWeakPtr weakNotationPtr = notation;
+
+    notation->notationChanged().onNotify(this, [this, weakNotationPtr]() {
+        INotationPtr notation = weakNotationPtr.lock();
+        if (!notation) {
+            return;
+        }
+
+        int index = m_notations.indexOf(notation);
         QModelIndex modelIndex = this->index(index);
-        emit dataChanged(modelIndex, modelIndex);
+        emit dataChanged(modelIndex, modelIndex, { RoleTitle });
+    });
+}
+
+void NotationSwitchListModel::listenProjectSavingStatusChanged()
+{
+    auto currentProject = context()->currentProject();
+    if (!currentProject) {
+        return;
+    }
+
+    currentProject->needSave().notification.onNotify(this, [this]() {
+        auto project = context()->currentProject();
+        if (!project) {
+            return;
+        }
+
+        int index = m_notations.indexOf(project->masterNotation()->notation());
+        QModelIndex modelIndex = this->index(index);
+        emit dataChanged(modelIndex, modelIndex, { RoleNeedSave });
+    });
+
+    currentProject->pathChanged().onNotify(this, [this]() {
+        auto project = context()->currentProject();
+        if (!project) {
+            return;
+        }
+
+        int index = m_notations.indexOf(project->masterNotation()->notation());
+        QModelIndex modelIndex = this->index(index);
+        emit dataChanged(modelIndex, modelIndex, { RoleTitle });
     });
 }
 
@@ -124,11 +196,13 @@ QVariant NotationSwitchListModel::data(const QModelIndex& index, int role) const
     }
 
     INotationPtr notation = m_notations[index.row()];
-    Meta meta = notation->metaInfo();
 
     switch (role) {
-    case RoleTitle: return QVariant::fromValue(meta.title);
-    case RoleNeedSave: return QVariant::fromValue(masterNotation()->needSave().val);
+    case RoleTitle: return QVariant::fromValue(notation->name());
+    case RoleNeedSave: {
+        bool needSave = context()->currentProject()->needSave().val && isMasterNotation(notation);
+        return QVariant::fromValue(needSave);
+    }
     }
 
     return QVariant();
@@ -166,14 +240,19 @@ void NotationSwitchListModel::closeNotation(int index)
 
     INotationPtr notation = m_notations[index];
 
-    if (context()->currentNotation() == notation) {
+    if (isMasterNotation(notation)) {
         dispatcher()->dispatch("file-close");
     } else {
-        notation->setOpened(false);
+        masterNotation()->setExcerptIsOpen(notation, false);
     }
 }
 
 bool NotationSwitchListModel::isIndexValid(int index) const
 {
     return index >= 0 && index < m_notations.size();
+}
+
+bool NotationSwitchListModel::isMasterNotation(const INotationPtr notation) const
+{
+    return context()->currentMasterNotation()->notation() == notation;
 }

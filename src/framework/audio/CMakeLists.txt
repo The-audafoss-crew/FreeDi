@@ -58,10 +58,11 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/audiomodule.h
     ${CMAKE_CURRENT_LIST_DIR}/audioerrors.h
     ${CMAKE_CURRENT_LIST_DIR}/iaudioconfiguration.h
+    ${CMAKE_CURRENT_LIST_DIR}/iaudiothreadsecurer.h
     ${CMAKE_CURRENT_LIST_DIR}/iaudiostream.h
-    ${CMAKE_CURRENT_LIST_DIR}/isynthesizer.h
-    ${CMAKE_CURRENT_LIST_DIR}/isynthesizersregister.h
-    ${CMAKE_CURRENT_LIST_DIR}/isoundfontsprovider.h
+    ${CMAKE_CURRENT_LIST_DIR}/abstractsynthesizer.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/abstractsynthesizer.h
+    ${CMAKE_CURRENT_LIST_DIR}/ifxprocessor.h
     ${CMAKE_CURRENT_LIST_DIR}/iaudiodriver.h
     ${CMAKE_CURRENT_LIST_DIR}/iaudiosource.h
     ${CMAKE_CURRENT_LIST_DIR}/synthtypes.h
@@ -69,26 +70,27 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/iplayer.h
     ${CMAKE_CURRENT_LIST_DIR}/itracks.h
     ${CMAKE_CURRENT_LIST_DIR}/iaudiooutput.h
+    ${CMAKE_CURRENT_LIST_DIR}/isynthresolver.h
+    ${CMAKE_CURRENT_LIST_DIR}/ifxresolver.h
     ${CMAKE_CURRENT_LIST_DIR}/iplayback.h
 
     # Common internal
     ${CMAKE_CURRENT_LIST_DIR}/internal/iaudiobuffer.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/audioconfiguration.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/audioconfiguration.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/audiothreadsecurer.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/audiothreadsecurer.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/audiobuffer.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/audiobuffer.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/audiothread.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/audiothread.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/audiosanitizer.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/audiosanitizer.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/audiomathutils.h
 
     # Driver
     ${DRIVER_SRC}
 
     # Worker
-    ${CMAKE_CURRENT_LIST_DIR}/internal/worker/ifxprocessor.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/worker/imixerchannel.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/playback.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/playback.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/abstractaudiosource.cpp
@@ -97,10 +99,8 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/samplerateconvertor.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/audiostream.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/audiostream.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/worker/audioplayer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/worker/audioplayer.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/worker/midiaudiosource.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/worker/midiaudiosource.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/worker/eventaudiosource.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/worker/eventaudiosource.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/sinesource.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/sinesource.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/noisesource.cpp
@@ -135,18 +135,26 @@ set(MODULE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/sequenceio.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/worker/track.h
 
+    # DSP
+    ${CMAKE_CURRENT_LIST_DIR}/internal/dsp/envelopefilterconfig.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/dsp/compressor.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/dsp/compressor.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/dsp/limiter.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/dsp/limiter.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/dsp/audiomathutils.h
+
+    # fx
+    ${CMAKE_CURRENT_LIST_DIR}/internal/fx/fxresolver.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/fx/fxresolver.h
 
     # Synthesizers
-    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/sanitysynthesizer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/sanitysynthesizer.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/fluidsynth/soundmapping.h
     ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/fluidsynth/fluidsynth.cpp
     ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/fluidsynth/fluidsynth.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/synthesizercontroller.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/synthesizercontroller.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/synthesizersregister.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/synthesizersregister.h
-    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/soundfontsprovider.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/soundfontsprovider.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/fluidsynth/fluidresolver.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/fluidsynth/fluidresolver.h
+    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/synthresolver.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/internal/synthesizers/synthresolver.h
     ${CMAKE_CURRENT_LIST_DIR}/view/synthssettingsmodel.cpp
     ${CMAKE_CURRENT_LIST_DIR}/view/synthssettingsmodel.h
 
@@ -173,17 +181,20 @@ set (MODULE_INCLUDE
     ${FLUIDSYNTH_INC}
     )
 
-if(OS_IS_WIN)
-    set(MODULE_LINK winmm )
-endif()
+set(MODULE_LINK
+    fluidsynth
+    )
 
-if(OS_IS_LIN)
+if (OS_IS_MAC)
+    find_library(AudioToolbox NAMES AudioToolbox)
+    set(MODULE_LINK ${MODULE_LINK} ${AudioToolbox})
+elseif (OS_IS_WIN)
+    set(MODULE_LINK ${MODULE_LINK} winmm )
+elseif (OS_IS_LIN)
     find_package(ALSA REQUIRED)
-    set(MODULE_LINK ${ALSA_LIBRARIES} pthread )
     set(MODULE_INCLUDE ${MODULE_INCLUDE} ${ALSA_INCLUDE_DIRS} )
+    set(MODULE_LINK ${MODULE_LINK} ${ALSA_LIBRARIES} pthread )
 endif()
-
-set(MODULE_LINK ${MODULE_LINK} fluidsynth )
 
 set(MODULE_QRC audio.qrc)
 

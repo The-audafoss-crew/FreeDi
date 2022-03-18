@@ -35,58 +35,42 @@ PopupView {
     property alias width: rootContainer.width
     property alias height: rootContainer.height
 
-    property int margins: 16
+    property int margins: 12 + contentBackground.border.width
 
-    property int contentWidth: 240
-    property int contentHeight: contentBody.childrenRect.height
+    contentWidth: 240
+    contentHeight: contentBody.childrenRect.height
 
     property bool animationEnabled: false
-
-    property alias navigation: keynavPanel
-    property bool isDoActiveParentOnClose: true
 
     closePolicy: PopupView.CloseOnPressOutsideParent
 
     x: (root.parent.width / 2) - (root.width / 2)
     y: root.parent.height
 
-    property NavigationPanel keynavPanel: NavigationPanel {
-        id: keynavPanel
+    property bool isDoActiveParentOnClose: true
+    property bool isCloseByEscape: true
+    property NavigationSection navigationSection: NavigationSection {
+        id: navSec
+        name: root.objectName !== "" ? root.objectName : "StyledPopupView"
+        type: NavigationSection.Exclusive
         enabled: root.isOpened
-        order: {
-            var pctrl = root.navigationParentControl;
-            if (pctrl) {
-                if (pctrl.panel) {
-                    return pctrl.panel.order + 1
-                }
-            }
-            return -1
-        }
-
-        section: {
-            var pctrl = root.navigationParentControl;
-            if (pctrl) {
-                if (pctrl.panel) {
-                    return pctrl.panel.section
-                }
-            }
-            return null
-        }
+        order: 1
 
         onActiveChanged: {
-            if (keynavPanel.active) {
-                root.forceActiveFocus()
+            if (navSec.active) {
                 rootContainer.forceActiveFocus()
-            } else {
-                root.close()
             }
         }
 
-        onNavigationEvent: {
-            if (event.type === NavigationEvent.Escape) {
+        onNavigationEvent: function(event) {
+            if (event.type === NavigationEvent.Escape && root.isCloseByEscape) {
                 root.close()
             }
         }
+    }
+
+    onOpened: {
+        navSec.requestActive()
     }
 
     onClosed: {
@@ -176,10 +160,17 @@ PopupView {
 
                 Connections {
                     target: root
+                    function onOpensUpwardChanged() { arrow.requestPaint() }
+                }
 
-                    function onOpensUpwardChanged() {
-                        arrow.requestPaint()
-                    }
+                Connections {
+                    target: contentBackground
+                    function onColorChanged() { arrow.requestPaint() }
+                }
+
+                Connections {
+                    target: contentBackground.border
+                    function onColorChanged() { arrow.requestPaint() }
                 }
             }
 

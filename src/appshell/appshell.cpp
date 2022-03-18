@@ -32,7 +32,6 @@
 #endif
 #include "view/dockwindow/docksetup.h"
 
-#include "log.h"
 #include "modularity/ioc.h"
 #include "ui/internal/uiengine.h"
 #include "version.h"
@@ -40,6 +39,8 @@
 #include "commandlinecontroller.h"
 
 #include "framework/global/globalmodule.h"
+
+#include "log.h"
 
 using namespace mu::appshell;
 
@@ -70,7 +71,18 @@ int AppShell::run(int argc, char** argv)
         appName  = "MuseScore4";
     }
 
+#ifdef Q_OS_WIN
+    // NOTE: There are some problems with rendering the application window on some integrated graphics processors
+    //       see https://github.com/musescore/MuseScore/issues/8270
+    QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
+
+    if (!qEnvironmentVariableIsSet("QT_OPENGL_BUGLIST")) {
+        qputenv("QT_OPENGL_BUGLIST", ":/resources/win_opengl_buglist.json");
+    }
+#endif
+
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName(appName);
     QCoreApplication::setOrganizationName("MuseScore");
@@ -148,6 +160,8 @@ int AppShell::run(int argc, char** argv)
             }, Qt::QueuedConnection);
     } break;
     case framework::IApplication::RunMode::Editor: {
+        QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+
         // ====================================================
         // Setup Qml Engine
         // ====================================================
@@ -174,10 +188,21 @@ int AppShell::run(int argc, char** argv)
 #endif
 
         QObject::connect(engine, &QQmlApplicationEngine::objectCreated,
-                         &app, [url](QObject* obj, const QUrl& objUrl) {
+                         &app, [this, url](QObject* obj, const QUrl& objUrl) {
                 if (!obj && url == objUrl) {
                     LOGE() << "failed Qml load\n";
                     QCoreApplication::exit(-1);
+                }
+
+                if (url == objUrl) {
+                    // ====================================================
+                    // Setup modules: onDelayedInit
+                    // ====================================================
+
+                    globalModule.onDelayedInit();
+                    for (mu::modularity::IModuleSetup* m : m_modules) {
+                        m->onDelayedInit();
+                    }
                 }
             }, Qt::QueuedConnection);
 
@@ -196,16 +221,6 @@ int AppShell::run(int argc, char** argv)
         QQuickWindow::setDefaultAlphaBuffer(true);
 
         engine->load(url);
-
-        // ====================================================
-        // Setup modules: onDelayedInit
-        // ====================================================
-        QTimer::singleShot(5000, [this]() {
-                globalModule.onDelayedInit();
-                for (mu::modularity::IModuleSetup* m : m_modules) {
-                    m->onDelayedInit();
-                }
-            });
     }
     }
 
@@ -232,11 +247,23 @@ int AppShell::run(int argc, char** argv)
     ui::UiEngine::instance()->quit();
 
     // Deinit
+
     for (mu::modularity::IModuleSetup* m : m_modules) {
         m->onDeinit();
     }
 
     globalModule.onDeinit();
+
+    for (mu::modularity::IModuleSetup* m : m_modules) {
+        m->onDestroy();
+    }
+
+    globalModule.onDestroy();
+
+    // Delete modules
+    qDeleteAll(m_modules);
+    m_modules.clear();
+    mu::modularity::ioc()->reset();
 
     return retCode;
 }

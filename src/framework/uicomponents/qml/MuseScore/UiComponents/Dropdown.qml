@@ -43,16 +43,17 @@ Item {
     property string displayText : root.currentText
 
     property int popupWidth: root.width
-    property int popupItemsCount: root.defaultPopupItemsCount()
+    property int popupItemsCount: 18
 
     property alias dropIcon: dropIconItem
     property alias label: mainItem.label
 
     property alias navigation: mainItem.navigation
 
+    signal activated(int index)
+
     height: 30
     width: 126
-
 
     //! NOTE We should not just bind to the current values, because when the component is created,
     //! the `onCurrentValueChanged` slot will be called, often in the handlers of which there are not yet initialized values
@@ -110,14 +111,6 @@ Item {
         return -1
     }
 
-    function defaultPopupItemsCount() {
-        if (root.count > 20) {
-            return 16
-        }
-
-        return 6
-    }
-
     function positionViewAtFirstChar(text) {
 
         if (text === "") {
@@ -127,7 +120,7 @@ Item {
         text = text.toLowerCase()
         var idx = -1
         for (var i = 0; i < root.count; ++i) {
-            var itemText = accesser.itemAt(i).text
+            var itemText =  root.valueFromModel(i, root.textRole, "")
             if (itemText.toLowerCase().startsWith(text)) {
                 idx = i;
                 break;
@@ -139,27 +132,25 @@ Item {
         }
     }
 
+    function ensureActiveFocus() {
+        if (mainItem.navigation) {
+            mainItem.navigation.requestActive()
+        }
+    }
+
     DropdownItem {
         id: mainItem
         anchors.fill: parent
         text: root.displayText
 
+        navigation.accessible.role: MUAccessible.ComboBox
+
+        background.border.width: ui.theme.borderWidth
+        background.border.color: ui.theme.strokeColor
+
         onClicked: {
             popup.navigationParentControl = root.navigation
             popup.open()
-        }
-
-        mouseArea.onWheel: {
-            var angleY = wheel.angleDelta.y
-            if (angleY > 0) {
-                if (root.currentIndex > 0) {
-                    root.currentIndex -= 1
-                }
-            } else {
-                if (root.currentIndex < (root.count - 1)) {
-                    root.currentIndex += 1
-                }
-            }
         }
     }
 
@@ -184,7 +175,7 @@ Item {
 
         contentWidth: root.popupWidth
         contentHeight: root.height * Math.min(root.count, root.popupItemsCount)
-        padding: 0
+        padding: ui.theme.borderWidth
         margins: 0
 
         x: 0
@@ -193,14 +184,11 @@ Item {
         onOpened: {
             popup.forceActiveFocus()
             contentItem.forceActiveFocus()
-            view.positionViewAtIndex(root.currentIndex, ListView.Center)
-            var item = view.itemAtIndex(root.currentIndex)
-            item.navigation.requestActive()
         }
 
         function closeAndReturnFocus() {
-            popup.close()
             popup.navigationParentControl.requestActive()
+            popup.close()
         }
 
         NavigationPanel {
@@ -220,7 +208,7 @@ Item {
                 }
             }
 
-            onNavigationEvent: {
+            onNavigationEvent: function(event) {
                 console.log("onNavigationEvent event: " + JSON.stringify(event))
                 if (event.type === NavigationEvent.Escape) {
                     popup.closeAndReturnFocus()
@@ -235,7 +223,9 @@ Item {
                 id: bgItem
                 anchors.fill: parent
                 color: mainItem.background.color
-                radius: 4
+                radius: 3
+                border.width: ui.theme.borderWidth
+                border.color: ui.theme.strokeColor
             }
 
             StyledDropShadow {
@@ -248,7 +238,7 @@ Item {
             id: contentItem
             focus: true
 
-            Keys.onShortcutOverride: {
+            Keys.onShortcutOverride: function(event) {
                 // console.log("onShortcutOverride event: " + JSON.stringify(event))
                 if (event.text !== "") {
                     event.accepted = true
@@ -259,7 +249,7 @@ Item {
                 }
             }
 
-            Keys.onReleased: {
+            Keys.onReleased: function(event) {
                 // console.log("onReleased event: " + JSON.stringify(event))
                 if (event.text === "") {
                     return
@@ -272,19 +262,16 @@ Item {
                 color: mainItem.background.color
                 radius: 4
 
-                ListView {
+                StyledListView {
                     id: view
 
                     anchors.fill: parent
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
 
                     model: root.model
 
                     ScrollBar.vertical: StyledScrollBar {
-                        anchors.right: parent.right
-                        anchors.rightMargin: 4
-                        width: 4
+                        thickness: 6
+                        policy: ScrollBar.AlwaysOn
                     }
 
                     delegate: DropdownItem {
@@ -293,6 +280,8 @@ Item {
 
                         height: root.height
                         width: popup.contentWidth
+
+                        insideDropdownList: true
 
                         navigation.name: item.text
                         navigation.panel: popupNavPanel
@@ -307,12 +296,21 @@ Item {
                         background.opacity: 1.0
                         hoveredColor: ui.theme.accentColor
 
-                        selected: model.index === root.currentIndex
+                        selected: model.index === root.currentIndex && popup.opened
                         text: root.valueFromModel(model.index, root.textRole, "")
+
+                        onSelectedChanged: {
+                            if (!item.navigation.active && item.selected) {
+                                view.positionViewAtIndex(root.currentIndex, ListView.Center)
+                                item.navigation.requestActive()
+                            }
+                        }
 
                         onClicked: {
                             root.currentIndex = model.index
                             popup.closeAndReturnFocus()
+
+                            root.activated(root.currentIndex)
                         }
                     }
                 }
